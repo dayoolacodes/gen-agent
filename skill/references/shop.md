@@ -2,7 +2,7 @@
 
 - Shop: Adaeze Provisions, 14 Ogunlana Drive, Surulere, Lagos. Open 7am to 10pm, seven days.
 - Owner: Adaeze. She confirms purchases above NGN 20,000 and reads the morning briefing.
-- Staff who message: Ade (morning shift), Tunde (evening shift). They buy diesel and read the meter.
+- Staff who message: Ade (morning shift), Tunde (evening shift). They buy diesel, check how much is left in the tank, and read the meter.
 
 ## Power setup
 
@@ -15,6 +15,7 @@
 ## Thresholds
 
 - Warn when prepaid units are projected to run out within 3 days.
+- Warn when diesel is projected to run out within 1 day.
 - Warn when diesel spend is on track to exceed the weekly budget.
 
 ## Test meter numbers for the demo

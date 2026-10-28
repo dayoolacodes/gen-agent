@@ -23,6 +23,7 @@ vend = get_provider(store)
 
 GEN_LITRES_PER_HOUR = float(os.getenv("GEN_LITRES_PER_HOUR", "1.8"))  # 7.5kVA diesel at half load, rough
 MAX_UNATTENDED_NGN = float(os.getenv("MAX_UNATTENDED_NGN", "20000"))
+DIESEL_ALERT_DAYS = float(os.getenv("DIESEL_ALERT_DAYS", "1"))
 
 mcp = FastMCP("energy-tools", stateless_http=True, json_response=True)
 
@@ -50,6 +51,18 @@ def log_meter_reading(units: float, logged_by: str = "staff", note: str = "") ->
 
 
 @mcp.tool()
+def log_diesel_on_hand(litres: float, logged_by: str = "staff", note: str = "") -> dict:
+    """Record how much diesel is left in the generator tank and jerrycans, in litres. Use when staff say
+    things like 'tank at about 15 litres' or 'diesel left 10L'. Not for purchases; use log_fuel for those."""
+    if litres < 0:
+        return {"ok": False, "error": "litres cannot be negative"}
+    row = {"ts": now_iso(), "type": "diesel_level", "litres": litres, "cost_ngn": "",
+           "meter_units": "", "logged_by": logged_by, "note": note}
+    store.append("energy", row)
+    return {"ok": True, "logged": row}
+
+
+@mcp.tool()
 def get_energy_summary(days: int = 7) -> dict:
     """Summarise diesel spend and meter trend over the last N days, with projected days until diesel
     and prepaid units run out. Use for 'how much have we spent', 'are we running low', daily briefings."""
@@ -65,6 +78,10 @@ def get_energy_summary(days: int = 7) -> dict:
     # Assume stock on hand is whatever was bought in the window minus burn; crude but honest.
     est_hours_run = litres_per_day / GEN_LITRES_PER_HOUR if GEN_LITRES_PER_HOUR else 0
 
+    burn = _diesel_litres_per_day(rows) or (round(litres_per_day, 2) if litres_per_day else None)
+    on_hand = _diesel_on_hand(rows)
+    diesel_days_left = round(on_hand / burn, 1) if on_hand is not None and burn else None
+
     meter_now = float(meters[-1]["meter_units"]) if meters else None
     units_per_day = _units_per_day(meters)
     days_units_left = round(meter_now / units_per_day, 1) if meter_now is not None and units_per_day else None
@@ -72,6 +89,8 @@ def get_energy_summary(days: int = 7) -> dict:
     alerts = []
     if days_units_left is not None and days_units_left < 3:
         alerts.append(f"Prepaid units will run out in about {days_units_left} days")
+    if diesel_days_left is not None and diesel_days_left < DIESEL_ALERT_DAYS:
+        alerts.append(f"Diesel will run out in about {diesel_days_left} days")
     if daily_spend and daily_spend * 7 > float(os.getenv("WEEKLY_DIESEL_BUDGET_NGN", "150000")):
         alerts.append("Diesel spend is above the weekly budget")
     if not diesel and not meters:
@@ -80,7 +99,8 @@ def get_energy_summary(days: int = 7) -> dict:
     return {
         "window_days": days,
         "diesel": {"litres": litres, "spend_ngn": spend, "daily_spend_ngn": daily_spend,
-                   "est_gen_hours_per_day": round(est_hours_run, 1), "purchases": len(diesel)},
+                   "est_gen_hours_per_day": round(est_hours_run, 1), "purchases": len(diesel),
+                   "on_hand_litres": on_hand, "litres_per_day": burn, "days_left": diesel_days_left},
         "meter": {"units_now": meter_now, "units_per_day": units_per_day, "days_left": days_units_left},
         "alerts": alerts,
     }
@@ -130,6 +150,34 @@ def _units_per_day(meters: list[dict]) -> float | None:
         used += du
         span_days += max((_ts(b) - _ts(a)).total_seconds() / 86400, 1 / 24)
     return round(used / span_days, 2) if span_days else None
+
+
+def _diesel_litres_per_day(rows: list[dict]) -> float | None:
+    """Litres burned per day between consecutive tank readings: earlier level + litres bought in
+    between - later level. Returns None until there are two usable tank readings."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RATE_WINDOW_DAYS)
+    levels = sorted([r for r in rows if r.get("type") == "diesel_level" and _ts(r) >= cutoff], key=_ts)
+    buys = [r for r in rows if r.get("type") == "diesel"]
+    used = 0.0
+    span_days = 0.0
+    for a, b in zip(levels, levels[1:]):
+        bought = sum(float(r["litres"] or 0) for r in buys if _ts(a) < _ts(r) <= _ts(b))
+        dl = float(a["litres"]) + bought - float(b["litres"])
+        if dl <= 0:
+            continue
+        used += dl
+        span_days += max((_ts(b) - _ts(a)).total_seconds() / 86400, 1 / 24)
+    return round(used / span_days, 2) if span_days else None
+
+
+def _diesel_on_hand(rows: list[dict]) -> float | None:
+    """Last tank reading plus anything bought since. None if nobody has reported the tank yet."""
+    levels = sorted([r for r in rows if r.get("type") == "diesel_level"], key=_ts)
+    if not levels:
+        return None
+    last = levels[-1]
+    bought = sum(float(r["litres"] or 0) for r in rows if r.get("type") == "diesel" and _ts(r) > _ts(last))
+    return round(float(last["litres"]) + bought, 1)
 
 
 def _log_top_up(res) -> None:
