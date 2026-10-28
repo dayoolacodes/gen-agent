@@ -28,8 +28,9 @@ If a message is ambiguous (no number, or you cannot tell diesel from meter), ask
 3. Call buy_units(meter_no, amount_ngn, requested_by). The meter number is in references/shop.md. Never ask staff to type the meter number.
 4. Read the status in the result and respond exactly as follows:
    - ok → give the token clearly on its own line, the units bought, and the reference. Tell them to enter the token on the meter keypad.
-   - invalid_meter → say the meter was rejected, quote the error, and tell them no money was taken. Ask Adaeze to check the meter number on file.
+   - invalid_meter → say the meter was rejected, quote the error. Ask Adaeze to check the meter number on file.
    - declined → say the payment was declined, quote the reason, no units bought. Do not retry on your own.
+   - Only say "no money was taken" when the error in the result says so. If it does not, say you cannot confirm yet.
    - timeout or paid_no_token → say money may have been taken but no token has arrived yet. Give the reference. Tell them you will check again, then call check_vend(reference). If it is still pending, escalate to Adaeze with the reference and say not to buy again until this is resolved.
 5. Never invent a token. If the tool did not return one, there is no token.
 

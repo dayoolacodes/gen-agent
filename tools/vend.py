@@ -58,17 +58,17 @@ class MockVend:
         ref = _ref()
         m = meter_no.strip()
         if not m.isdigit() or len(m) < 11:
-            return VendResult("invalid_meter", ref, m, amount_ngn, error="Meter number must be 11+ digits")
+            return VendResult("invalid_meter", ref, m, amount_ngn, error="Meter number must be 11+ digits. No money was taken.")
         if amount_ngn < 1000:
-            return VendResult("declined", ref, m, amount_ngn, error="Minimum purchase is NGN 1,000")
+            return VendResult("declined", ref, m, amount_ngn, error="Minimum purchase is NGN 1,000. No money was taken.")
         if m.endswith("00"):
-            return VendResult("invalid_meter", ref, m, amount_ngn, error="Meter not found at DisCo")
+            return VendResult("invalid_meter", ref, m, amount_ngn, error="Meter not found at DisCo. No money was taken.")
         if m.endswith("11"):
             return VendResult("timeout", ref, m, amount_ngn, error="Provider timed out after 30s")
         if m.endswith("22"):
             return VendResult("paid_no_token", ref, m, amount_ngn, error="Payment captured, token pending from DisCo")
         if m.endswith("33"):
-            return VendResult("declined", ref, m, amount_ngn, error="Payment declined by issuer")
+            return VendResult("declined", ref, m, amount_ngn, error="Payment declined by issuer. No money was taken.")
         units = round(amount_ngn / self.TARIFF_NGN_PER_KWH, 1)
         token = "-".join("".join(random.choices(string.digits, k=4)) for _ in range(5))
         return VendResult("ok", ref, m, amount_ngn, units=units, token=token)
@@ -128,6 +128,18 @@ class VTPassVend:
         stamp = datetime.now(ZoneInfo("Africa/Lagos")).strftime("%Y%m%d%H%M")
         return stamp + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
+    def wallet_balance(self) -> float | None:
+        """VTpass wallet balance in NGN, or None if it could not be read. GET, so api-key + public-key.
+        Note the different envelope: {"code":1,"contents":{"balance":"..."}}."""
+        import httpx
+
+        try:
+            r = httpx.get(f"{self.base}/balance", timeout=self.timeout,
+                          headers={"api-key": self.headers["api-key"], "public-key": os.environ["VTPASS_PUBLIC_KEY"]})
+            return float(r.json()["contents"]["balance"])
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            return None
+
     def verify_meter(self, meter_no: str) -> dict:
         """Check the meter with the DisCo before paying. Returns {valid, name, error}."""
         import httpx
@@ -151,19 +163,41 @@ class VTPassVend:
         ref = self._request_id()
         v = self.verify_meter(meter_no)
         if not v["valid"]:
-            if not v["reachable"]:
-                return VendResult("declined", ref, meter_no, amount_ngn, error=v["error"] + ". No payment was attempted.")
-            return VendResult("invalid_meter", ref, meter_no, amount_ngn, error=v["error"])
+            # pay is never called on this path, so nothing can have been charged.
+            status = "invalid_meter" if v["reachable"] else "declined"
+            return VendResult(status, ref, meter_no, amount_ngn,
+                              error=v["error"] + ". Payment was not attempted, so no money was taken.")
+        before = self.wallet_balance()
         payload = {"request_id": ref, "serviceID": self.service_id, "billersCode": meter_no,
                    "variation_code": self.variation, "amount": amount_ngn,
                    "phone": os.getenv("VTPASS_PHONE", "08011111111")}
         try:
-            data = self._post("pay", payload)
+            res = self._map(self._post("pay", payload), ref, meter_no, amount_ngn)
         except httpx.TimeoutException:
-            return VendResult("timeout", ref, meter_no, amount_ngn, error=f"Provider did not answer in {self.timeout:.0f}s")
+            res = VendResult("timeout", ref, meter_no, amount_ngn, error=f"Provider did not answer in {self.timeout:.0f}s")
         except httpx.HTTPError as e:
-            return VendResult("timeout", ref, meter_no, amount_ngn, error=f"Connection to provider failed: {e}")
-        return self._map(data, ref, meter_no, amount_ngn)
+            res = VendResult("timeout", ref, meter_no, amount_ngn, error=f"Connection to provider failed: {e}")
+        return self._settle(res, before, self.wallet_balance())
+
+    @staticmethod
+    def _settle(res: VendResult, before: float | None, after: float | None) -> VendResult:
+        """Use the wallet balance to decide what we can honestly say about money.
+        A drop is checked, not an exact amount: VTpass debits amount minus commission (5,000 -> 4,925)."""
+        if res.status == "ok":
+            return res
+        if before is None or after is None:
+            if res.status == "declined":
+                res.error += ". Could not read the wallet balance, so it is not confirmed whether money was taken."
+            return res
+        if after < before - 0.005:
+            res.status = "paid_no_token"
+            res.error = (f"Wallet went down by NGN {before - after:,.2f} but no token came back ({res.error}). "
+                         f"Reference {res.reference}. Requery before buying again.")
+        elif res.status == "declined":
+            res.error += ". Wallet balance unchanged, so no money was taken."
+        else:
+            res.error += ". Wallet balance unchanged so far."
+        return res
 
     def requery(self, reference: str) -> VendResult:
         import httpx
@@ -189,7 +223,8 @@ class VTPassVend:
             return VendResult("ok", ref, meter_no, amount_ngn, units=_kwh(data.get("units")), token=token)
         if code == "015":
             return VendResult("declined", ref, meter_no, amount_ngn,
-                              error="015 INVALID REQUEST ID: provider has no record of this purchase, so no money was taken")
+                              error="015 INVALID REQUEST ID: VTpass has no record of this request. Not checked against "
+                                    "the wallet, so do not say whether money was taken; check the balance before buying again")
         if code in self.NOT_CHARGED:
             return VendResult("declined", ref, meter_no, amount_ngn, error=f"{code} {desc}".strip())
         # 000 pending/initiated, 099, 089, 014, 083, delivered without a token, anything undocumented
