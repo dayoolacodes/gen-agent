@@ -7,5 +7,7 @@ services:
     envVars:
       - key: MCP_BEARER_TOKEN
         sync: false
+      - key: MCP_ALLOWED_HOSTS
+        sync: false
       - key: VEND_PROVIDER
         value: mock

@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -25,7 +26,17 @@ GEN_LITRES_PER_HOUR = float(os.getenv("GEN_LITRES_PER_HOUR", "1.8"))  # 7.5kVA d
 MAX_UNATTENDED_NGN = float(os.getenv("MAX_UNATTENDED_NGN", "20000"))
 DIESEL_ALERT_DAYS = float(os.getenv("DIESEL_ALERT_DAYS", "1"))
 
-mcp = FastMCP("energy-tools", stateless_http=True, json_response=True)
+# FastMCP's DNS-rebinding guard only accepts localhost Host headers by default, so behind ngrok or
+# Render every request gets 421 "Invalid Host header". List the public host(s), comma-separated,
+# exact match only (no *.ngrok-free.app wildcards), e.g. MCP_ALLOWED_HOSTS=abcd.ngrok-free.app
+PUBLIC_HOSTS = [h.strip() for h in os.getenv("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+security = TransportSecuritySettings(
+    allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", *PUBLIC_HOSTS],
+    allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*",
+                     *(f"https://{h}" for h in PUBLIC_HOSTS)],
+)
+
+mcp = FastMCP("energy-tools", stateless_http=True, json_response=True, transport_security=security)
 
 
 @mcp.tool()

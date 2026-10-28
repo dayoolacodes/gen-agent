@@ -25,7 +25,8 @@ python -m tools.server          # http://127.0.0.1:8000/mcp , /health
 ```
 
 Expose it publicly (Chord blocks loopback/private URLs): `ngrok http 8000` for testing,
-or deploy with `render.yaml`.
+or deploy with `render.yaml`. Set `MCP_ALLOWED_HOSTS` to the public hostname (for example
+`abcd.ngrok-free.app`) and restart, or every MCP call gets 421 "Invalid Host header".
 
 ## Register in Chord
 
