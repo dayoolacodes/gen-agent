@@ -34,7 +34,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Fix: `verify_meter` treats the meter as invalid if `WrongBillersCode` is true or `content.error` is set, whatever the code says.
 - What I'd change: return a non-000 code for a failed verification, or document that `WrongBillersCode` is the field to check.
 
-### [submission] (28 Oct) Sandbox pay blocked: 028 PRODUCT IS NOT WHITELISTED
+### (28 Oct) Sandbox pay blocked: 028 PRODUCT IS NOT WHITELISTED
 - What happened: every `pay` call returned `{"code":"028","response_description":"PRODUCT IS NOT WHITELISTED ON YOUR ACCOUNT","content":{"errors":""}}`, including the documented success meter 1111111111111. The sandbox wallet shows NGN 2,000,000, so balance is not the cause. Requery on the same request_id also returns 028.
 - How I found the cause: the error text is explicit. 028 is checked before anything else, so even a request_id without a date (`VNDAB12CD34`, which should get 085) returns 028.
 - The other test meters, called on `pay` directly because only 1111111111111 passes verification:
@@ -63,7 +63,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Fix or workaround: the agent does not try to reconcile them. It reports what the owner asked to spend, the units bought (parsed from `units`), the token and the reference. That is what Adaeze checks against the meter display. The wallet debit (total_amount) is only used to decide whether money was taken (see the wallet balance note).
 - What I'd change: define `tokenAmount` in the docs, and return units as a number, not a string with "kWh" appended.
 
-### (28 Oct) Behind ngrok, authenticated MCP calls get 421 Invalid Host header
+### [submission] (28 Oct) Behind ngrok, authenticated MCP calls get 421 Invalid Host header
 - What happened: with the server exposed through `ngrok http 8000`, `GET /health` returned 200 and `POST /mcp` without a token returned 401, so the tunnel looked healthy. MCP tool discovery with the bearer token then failed with `httpx.HTTPStatusError: Client error '421 Misdirected Request'`. Repeating the initialize call with curl gave the body `Invalid Host header`. Locally on 127.0.0.1 everything passed.
 - How I found the cause: grepped the installed SDK for the message. In mcp 1.26.0, `FastMCP(...)` defaults to `host="127.0.0.1"`, and for that host it silently enables `TransportSecuritySettings` with `allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"]` (mcp/server/fastmcp/server.py, around line 178). The process was listening on 0.0.0.0 through uvicorn, but FastMCP did not know that, so the public Host header was rejected. The 401 check passed only because our bearer middleware runs before the SDK's host check, which is why the unauthenticated smoke test missed it. The allowlist matches exact hosts or `host:*` ports only, so `*.ngrok-free.app` cannot be allowed.
 - Fix: kept the protection on and added `MCP_ALLOWED_HOSTS` (comma-separated, exact hostnames) to the localhost defaults. Set it to the ngrok hostname in `.env`, restarted, and discovery through the public URL lists all six tools. Added it to `.env.example`, `render.yaml` and the README. A free ngrok hostname changes on restart, so this has to be updated each time, or use a reserved domain.
