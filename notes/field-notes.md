@@ -28,13 +28,13 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Fix: merchant-verify, pay and requery send api-key + secret-key. The public key is used only for the GET balance call.
 - What I'd change: the Ikeja Electric page lists no headers, so you have to cross-reference the Authentication page. A one-line "POST: api-key + secret-key" on each endpoint page would have saved the round trip.
 
-### (28 Oct) A wrong meter verifies as code 000
+### [submission] (28 Oct) A wrong meter verifies as code 000
 - What happened: verifying 62101234567 (and every sandbox meter except 1111111111111) returned `{"code":"000","content":{"error":"This meter is not correct or is not a valid Ikeja Electric prepaid meter. Please check and try again","WrongBillersCode":true}}`. The response codes page says verification success is 020 and lists 011/012/030 for failures.
 - How I found the cause: compared raw JSON for a good and a bad meter. Only `content.WrongBillersCode` and `content.error` differ.
 - Fix: `verify_meter` treats the meter as invalid if `WrongBillersCode` is true or `content.error` is set, whatever the code says.
 - What I'd change: return a non-000 code for a failed verification, or document that `WrongBillersCode` is the field to check.
 
-### (28 Oct) Sandbox pay blocked: 028 PRODUCT IS NOT WHITELISTED
+### [submission] (28 Oct) Sandbox pay blocked: 028 PRODUCT IS NOT WHITELISTED
 - What happened: every `pay` call returned `{"code":"028","response_description":"PRODUCT IS NOT WHITELISTED ON YOUR ACCOUNT","content":{"errors":""}}`, including the documented success meter 1111111111111. The sandbox wallet shows NGN 2,000,000, so balance is not the cause. Requery on the same request_id also returns 028.
 - How I found the cause: the error text is explicit. 028 is checked before anything else, so even a request_id without a date (`VNDAB12CD34`, which should get 085) returns 028.
 - The other test meters, called on `pay` directly because only 1111111111111 passes verification:
@@ -47,7 +47,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Resolved: Ikeja Electric was then whitelisted in the VTpass sandbox dashboard (self-service; no support ticket needed). A vend to 1111111111111 for NGN 5,000 returned `"code":"000"`, status `delivered`, `"token":"Token : 26362054405982757802"`, `"units":"79.9 kWh"`. Requery returned the same token. VTPassVend maps it to `ok`, token `26362054405982757802`, 79.9 units.
 - What I'd change: whitelist the documented test products on new sandbox accounts by default. Also add pending and unexpected test meters that pass merchant-verify, so verify-then-pay can be tested end to end.
 
-### (28 Oct) Wallet balance: different envelope, net debit, shared wallet
+### [submission] (28 Oct) Wallet balance: different envelope, net debit, shared wallet
 - What happened: to stop the agent saying "no money was taken" on a guess, `buy` now reads the wallet balance before and after `pay`. Three surprises:
   - `GET /api/balance` returns `{"code":1,"contents":{"balance":"1995275.00"}}`. `code` is the integer 1, not the string "000", and the key is `contents`, not `content` as on every other endpoint.
   - A NGN 5,000 vend took the balance from 2,000,200.00 to 1,995,275.00, a drop of 4,925. VTpass debits the amount minus the 1.5% commission, so "did it drop by the amount" is the wrong test.
@@ -56,3 +56,9 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Fix: `wallet_balance()` parses `contents.balance` and returns None if it cannot. `buy` checks whether the balance dropped at all. If it dropped and there is no token, the result is `paid_no_token` with the reference, whatever pay said. If it is unchanged and pay was refused, the error says "no money was taken". If the balance could not be read, the error says it is not confirmed. SKILL.md now tells the agent to say "no money was taken" only when the result says so. A failed meter verification can still say it, because pay is never called on that path. Known limit: another debit on the same wallet between the two reads would look like this vend's debit. That errs towards `paid_no_token` and a requery, which is the safe side.
 - Also: the pay response includes the VTpass account holder's email and phone number. VendResult keeps only status, reference, meter, amount, units, token and error, so those never reach the store, the Sheet or WhatsApp. The sandbox also returns the same token on every vend, so token values cannot be used to tell sandbox vends apart.
 - What I'd change: use the same response envelope on balance as on everything else, and return the debited amount (or a `charged` flag) in the pay response, so clients do not have to infer it from two balance reads.
+
+### (28 Oct) Three naira figures in one VTpass receipt
+- What happened: the successful NGN 5,000 vend to 1111111111111 returned three different naira figures: `"amount":5000`, `"total_amount":4925` inside `content.transactions` (amount minus the NGN 75 commission, which is what left the wallet), and `"tokenAmount":1860.47` at the top level. None of them can be reconciled with `"units":"79.9 kWh"` at the shop's tariff: 79.9 kWh at NGN 225 is about NGN 17,978, and 5,000 / 79.9 is about NGN 62.58 per kWh. The response also has `"tariff":"R2 SINGLE PHASE RESIDENTIAL"`, `"taxAmount":0` and `"debtAmount":0`, so tax and arrears do not explain the gap.
+- How I found the cause: compared the figures in the raw pay JSON and the matching wallet balance change (2,000,200.00 to 1,995,275.00, a drop of 4,925). I could not find what tokenAmount means in the Ikeja Electric docs, and sandbox values may not follow real DisCo arithmetic.
+- Fix or workaround: the agent does not try to reconcile them. It reports what the owner asked to spend, the units bought (parsed from `units`), the token and the reference. That is what Adaeze checks against the meter display. The wallet debit (total_amount) is only used to decide whether money was taken (see the wallet balance note).
+- What I'd change: define `tokenAmount` in the docs, and return units as a number, not a string with "kWh" appended.

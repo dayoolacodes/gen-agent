@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import string
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -218,7 +219,7 @@ class VTPassVend:
         status = tx.get("status")
         meter_no = meter_no or str(tx.get("unique_element") or "")
         amount_ngn = amount_ngn or float(data.get("amount") or tx.get("amount") or 0)
-        token = _clean_token(data.get("token") or data.get("purchased_code"))
+        token = _clean_token(data.get("purchased_code") or data.get("token"))
         if code == "000" and status == "delivered" and token:
             return VendResult("ok", ref, meter_no, amount_ngn, units=_kwh(data.get("units")), token=token)
         if code == "015":
@@ -232,22 +233,20 @@ class VTPassVend:
                           error=f"{code} {desc} status={status}".strip() + ". Requery before buying again")
 
 
+TOKEN_RE = re.compile(r"\d{16,}")  # prepaid STS tokens are 20 digits
+UNITS_RE = re.compile(r"\s*(\d+(?:\.\d+)?)")
+
+
 def _clean_token(raw) -> str | None:
-    if not raw:
-        return None
-    s = str(raw)
-    if ":" in s:  # VTpass prefixes with "Token : "
-        s = s.split(":", 1)[1]
-    return s.strip() or None
+    """'Token : 26362054405982757802' -> '26362054405982757802'. None if there is no digit run."""
+    m = TOKEN_RE.search(str(raw or ""))
+    return m.group(0) if m else None
 
 
 def _kwh(raw) -> float | None:
-    if raw in (None, ""):
-        return None
-    try:
-        return float(str(raw).lower().replace("kwh", "").strip())
-    except ValueError:
-        return None
+    """'79.9 kWh' -> 79.9. Takes the leading number; None if there is none."""
+    m = UNITS_RE.match(str(raw if raw is not None else ""))
+    return float(m.group(1)) if m else None
 
 
 def get_provider(store=None):
