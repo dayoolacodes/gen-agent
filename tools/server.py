@@ -65,18 +65,9 @@ def get_energy_summary(days: int = 7) -> dict:
     # Assume stock on hand is whatever was bought in the window minus burn; crude but honest.
     est_hours_run = litres_per_day / GEN_LITRES_PER_HOUR if GEN_LITRES_PER_HOUR else 0
 
-    meter_now = None
-    units_per_day = None
-    days_units_left = None
-    if len(meters) >= 2:
-        a, b = meters[-2], meters[-1]
-        du = float(a["meter_units"]) - float(b["meter_units"])
-        dt_days = max((_ts(b) - _ts(a)).total_seconds() / 86400, 1 / 24)
-        units_per_day = round(du / dt_days, 2) if du > 0 else 0
-        meter_now = float(b["meter_units"])
-        days_units_left = round(meter_now / units_per_day, 1) if units_per_day else None
-    elif meters:
-        meter_now = float(meters[-1]["meter_units"])
+    meter_now = float(meters[-1]["meter_units"]) if meters else None
+    units_per_day = _units_per_day(meters)
+    days_units_left = round(meter_now / units_per_day, 1) if meter_now is not None and units_per_day else None
 
     alerts = []
     if days_units_left is not None and days_units_left < 3:
@@ -106,6 +97,7 @@ def buy_units(meter_no: str, amount_ngn: float, requested_by: str = "owner") -> 
     store.append("tokens", {"ts": now_iso(), "reference": res.reference, "meter_no": res.meter_no,
                             "amount_ngn": res.amount_ngn, "units": res.units or "", "token": res.token or "",
                             "status": res.status, "error": res.error or ""})
+    _log_top_up(res)
     return {"ok": res.status == "ok", **res.dict()}
 
 
@@ -117,7 +109,40 @@ def check_vend(reference: str) -> dict:
     if res.status == "ok":
         store.update_where("tokens", "reference", reference,
                            {"status": "ok", "token": res.token, "units": res.units, "error": ""})
+        _log_top_up(res)
     return {"ok": res.status == "ok", **res.dict()}
+
+
+RATE_WINDOW_DAYS = 14  # how far back to look when working out the burn rate
+
+
+def _units_per_day(meters: list[dict]) -> float | None:
+    """kWh used per day, from consecutive readings where units fell. Intervals where units rose
+    contain a top-up, so they say nothing about consumption and are skipped."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RATE_WINDOW_DAYS)
+    recent = [m for m in meters if _ts(m) >= cutoff]
+    used = 0.0
+    span_days = 0.0
+    for a, b in zip(recent, recent[1:]):
+        du = float(a["meter_units"]) - float(b["meter_units"])
+        if du <= 0:
+            continue
+        used += du
+        span_days += max((_ts(b) - _ts(a)).total_seconds() / 86400, 1 / 24)
+    return round(used / span_days, 2) if span_days else None
+
+
+def _log_top_up(res) -> None:
+    """After a successful vend, record the new meter balance so the forecast does not go stale.
+    Skipped if there is no earlier reading to add to; the next staff reading fixes it."""
+    if res.status != "ok" or not res.units:
+        return
+    meters = sorted([r for r in store.rows("energy") if r.get("type") == "meter"], key=_ts)
+    if not meters:
+        return
+    units = round(float(meters[-1]["meter_units"]) + float(res.units), 1)
+    store.append("energy", {"ts": now_iso(), "type": "meter", "litres": "", "cost_ngn": "",
+                            "meter_units": units, "logged_by": "system", "note": f"top-up {res.reference}"})
 
 
 def _ts(r: dict) -> datetime:
