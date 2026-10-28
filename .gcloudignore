@@ -1,0 +1,11 @@
+# Files gcloud must not upload with --source. Mirrors .dockerignore.
+.gcloudignore
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+.venv/
+data/
+__pycache__/
+*.json.sa
