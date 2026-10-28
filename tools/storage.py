@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ENERGY_HEADERS = ["ts", "type", "litres", "cost_ngn", "meter_units", "logged_by", "note"]
+REQUERY_HEADERS = ["ts", "reference"]
 TOKEN_HEADERS = ["ts", "reference", "meter_no", "amount_ngn", "units", "token", "status", "error"]
 
 
@@ -63,6 +64,7 @@ class SheetsStore:
         self.sh = gc.open_by_key(sheet_id)
         self._ensure("energy", ENERGY_HEADERS)
         self._ensure("tokens", TOKEN_HEADERS)
+        self._ensure("requeries", REQUERY_HEADERS)
 
     def _ensure(self, tab: str, headers: list[str]):
         try:

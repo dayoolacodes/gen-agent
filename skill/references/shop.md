@@ -26,7 +26,7 @@ The mock vending provider decides the outcome from the last two digits:
 | 62101234567   | ok, token issued |
 | 62101234500   | invalid_meter  |
 | 62101234511   | timeout        |
-| 62101234522   | paid_no_token  |
+| 62101234522   | paid_no_token; first check_vend still pending, second gives the token |
 | 62101234533   | declined       |
 
 Amounts under NGN 1,000 are declined by the provider minimum.

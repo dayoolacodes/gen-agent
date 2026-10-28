@@ -16,7 +16,7 @@ import os
 import random
 import string
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 
@@ -34,6 +34,10 @@ class VendResult:
         return asdict(self)
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _ref() -> str:
     return "VND" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
@@ -42,7 +46,7 @@ class MockVend:
     """Behaviour is driven by the meter number so every path is demoable:
       ends in 00  -> invalid_meter
       ends in 11  -> timeout
-      ends in 22  -> paid_no_token
+      ends in 22  -> paid_no_token (requery: still pending once, then resolves)
       ends in 33  -> declined
       anything else -> ok
     Amount under 1000 NGN -> declined (provider minimum).
@@ -69,11 +73,23 @@ class MockVend:
         token = "-".join("".join(random.choices(string.digits, k=4)) for _ in range(5))
         return VendResult("ok", ref, m, amount_ngn, units=units, token=token)
 
+    def __init__(self, store=None):
+        self.store = store  # holds the requery counter so it survives restarts
+
     def requery(self, reference: str) -> VendResult:
-        # Mock: a pending vend resolves on requery
-        units = 10.0
+        """...22 meters stay pending on the first requery and resolve on the second."""
+        orig = next((r for r in self.store.rows("tokens") if r.get("reference") == reference), None) if self.store else None
+        if orig is None:
+            return VendResult("declined", reference, "", 0.0,
+                              error="Provider has no record of this reference, so no money was taken")
+        meter_no, amount = str(orig["meter_no"]), float(orig["amount_ngn"] or 0)
+        self.store.append("requeries", {"ts": _now(), "reference": reference})
+        tries = sum(1 for r in self.store.rows("requeries") if r.get("reference") == reference)
+        if meter_no.endswith("22") and tries < 2:
+            return VendResult("paid_no_token", reference, meter_no, amount, error="Still pending at DisCo")
+        units = round(amount / self.TARIFF_NGN_PER_KWH, 1)
         token = "-".join("".join(random.choices(string.digits, k=4)) for _ in range(5))
-        return VendResult("ok", reference, "", 0.0, units=units, token=token)
+        return VendResult("ok", reference, meter_no, amount, units=units, token=token)
 
 
 class VTPassVend:
@@ -199,7 +215,7 @@ def _kwh(raw) -> float | None:
         return None
 
 
-def get_provider():
+def get_provider(store=None):
     if os.getenv("VEND_PROVIDER", "mock").lower() == "vtpass":
         return VTPassVend()
-    return MockVend()
+    return MockVend(store)

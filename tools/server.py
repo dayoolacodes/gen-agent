@@ -19,7 +19,7 @@ from tools.storage import get_store, now_iso
 from tools.vend import get_provider
 
 store = get_store()
-vend = get_provider()
+vend = get_provider(store)
 
 GEN_LITRES_PER_HOUR = float(os.getenv("GEN_LITRES_PER_HOUR", "1.8"))  # 7.5kVA diesel at half load, rough
 MAX_UNATTENDED_NGN = float(os.getenv("MAX_UNATTENDED_NGN", "20000"))
