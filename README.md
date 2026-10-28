@@ -24,9 +24,15 @@ export $(cat .env | xargs)
 python -m tools.server          # http://127.0.0.1:8000/mcp , /health
 ```
 
-Expose it publicly (Chord blocks loopback/private URLs): `ngrok http 8000` for testing,
-or deploy with `render.yaml`. Set `MCP_ALLOWED_HOSTS` to the public hostname (for example
-`abcd.ngrok-free.app`) and restart, or every MCP call gets 421 "Invalid Host header".
+Chord blocks loopback and private URLs, so the server has to be public.
+
+**Live deploy (Google Cloud Run, europe-west1):** `https://energy-mcp-210407125100.europe-west1.run.app/mcp`
+(also served at `https://energy-mcp-meih7aeriq-ew.a.run.app`). To redeploy: `bash scripts/deploy_cloudrun.sh`.
+It reads `.env`, sends the service-account JSON as `GOOGLE_SA_JSON_CONTENT`, deploys from the `Dockerfile`,
+then sets `MCP_ALLOWED_HOSTS` to both Cloud Run hostnames. Without that, every MCP call gets 421 "Invalid Host header".
+
+For a quick test from a laptop, `ngrok http 8000` works too; set `MCP_ALLOWED_HOSTS` to the ngrok hostname
+and restart. `render.yaml` is kept as an alternative but has not been deployed.
 
 ## Register in Chord
 
@@ -53,8 +59,9 @@ with: `bought 25 litres diesel 32,500` / `tank at about 15 litres` / `meter show
 
 ## Google Sheet (optional, owner-facing)
 
-Create a sheet, share it with a service account, set `SHEET_ID` and `GOOGLE_SA_JSON`.
-Tabs `energy` and `tokens` are created on first run.
+Create a sheet, share it with a service account as Editor, set `SHEET_ID` and either `GOOGLE_SA_JSON`
+(file path) or `GOOGLE_SA_JSON_CONTENT` (the raw JSON). Tabs `energy`, `tokens` and `requeries` are created
+on first run. `python scripts/seed_sheet.py` adds a week of made-up history so the first summary is not empty.
 
 ## AI tools used
 
