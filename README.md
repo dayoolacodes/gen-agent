@@ -10,7 +10,7 @@ skill/          SKILL.md + references/shop.md   -> upload as the Chord skill
 tools/          MCP server (FastMCP, Streamable HTTP) -> register in Chord as a tool server
   server.py     five tools: log_fuel, log_meter_reading, get_energy_summary, buy_units, check_vend
   storage.py    Google Sheet (gspread) or local JSON, same interface
-  vend.py       vending providers: MockVend (deterministic) and VTPassVend (sandbox stub)
+  vend.py       vending providers: MockVend (deterministic, default) and VTPassVend (VTpass sandbox)
 notes/          field-notes.md (written as problems are hit) and go-live note
 ```
 
