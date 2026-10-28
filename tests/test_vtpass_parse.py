@@ -19,6 +19,9 @@ class TokenAndUnits(unittest.TestCase):
     def test_token_is_digit_run_from_purchased_code(self):
         self.assertEqual(_clean_token(SUCCESS["purchased_code"]), "26362054405982757802")
 
+    def test_dashed_token_parses(self):
+        self.assertEqual(_clean_token("Token : 2636-2054-4059-8275-7802"), "26362054405982757802")
+
     def test_units_leading_number_as_float(self):
         self.assertEqual(_kwh(SUCCESS["units"]), 79.9)
         self.assertIsInstance(_kwh(SUCCESS["units"]), float)

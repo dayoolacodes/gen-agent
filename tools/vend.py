@@ -219,7 +219,7 @@ class VTPassVend:
         status = tx.get("status")
         meter_no = meter_no or str(tx.get("unique_element") or "")
         amount_ngn = amount_ngn or float(data.get("amount") or tx.get("amount") or 0)
-        token = _clean_token(data.get("purchased_code") or data.get("token"))
+        token = _clean_token(data.get("purchased_code")) or _clean_token(data.get("token"))
         if code == "000" and status == "delivered" and token:
             return VendResult("ok", ref, meter_no, amount_ngn, units=_kwh(data.get("units")), token=token)
         if code == "015":
@@ -238,8 +238,9 @@ UNITS_RE = re.compile(r"\s*(\d+(?:\.\d+)?)")
 
 
 def _clean_token(raw) -> str | None:
-    """'Token : 26362054405982757802' -> '26362054405982757802'. None if there is no digit run."""
-    m = TOKEN_RE.search(str(raw or ""))
+    """'Token : 26362054405982757802' or 'Token : 2636-2054-4059-8275-7802' -> '26362054405982757802'.
+    Every non-digit is dropped first so dashed or spaced tokens still parse. None if under 16 digits."""
+    m = TOKEN_RE.search(re.sub(r"\D", "", str(raw or "")))
     return m.group(0) if m else None
 
 
