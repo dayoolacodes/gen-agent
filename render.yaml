@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: energy-mcp
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m tools.server
+    envVars:
+      - key: MCP_BEARER_TOKEN
+        sync: false
+      - key: VEND_PROVIDER
+        value: mock

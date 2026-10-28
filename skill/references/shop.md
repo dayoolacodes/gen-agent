@@ -1,0 +1,32 @@
+# Adaeze Provisions (all details fictional, test data only)
+
+- Shop: Adaeze Provisions, 14 Ogunlana Drive, Surulere, Lagos. Open 7am to 10pm, seven days.
+- Owner: Adaeze. She confirms purchases above NGN 20,000 and reads the morning briefing.
+- Staff who message: Ade (morning shift), Tunde (evening shift). They buy diesel and read the meter.
+
+## Power setup
+
+- Generator: 7.5kVA diesel, runs roughly 6 to 8 hours a day during outages, about 1.8 litres per hour.
+- Diesel usually bought in 20 to 25 litre jerrycans from the filling station on Adelabu Street.
+- Prepaid meter: Ikeja Electric, meter number 62101234567 (test number; MockVend treats it as valid).
+- Tariff: about NGN 225 per kWh (Band A). Units are kWh.
+- Weekly diesel budget: NGN 150,000. Above that, Adaeze wants to know.
+
+## Thresholds
+
+- Warn when prepaid units are projected to run out within 3 days.
+- Warn when diesel spend is on track to exceed the weekly budget.
+
+## Test meter numbers for the demo
+
+The mock vending provider decides the outcome from the last two digits:
+
+| Meter number  | Outcome        |
+|---------------|----------------|
+| 62101234567   | ok, token issued |
+| 62101234500   | invalid_meter  |
+| 62101234511   | timeout        |
+| 62101234522   | paid_no_token  |
+| 62101234533   | declined       |
+
+Amounts under NGN 1,000 are declined by the provider minimum.

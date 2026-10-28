@@ -1,0 +1,5 @@
+.env
+data/store.json
+*.json.sa
+__pycache__/
+.venv/
