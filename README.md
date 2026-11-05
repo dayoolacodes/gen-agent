@@ -71,4 +71,8 @@ on first run. `python scripts/seed_sheet.py` adds a week of made-up history so t
 
 ## AI tools used
 
-(Fill in briefly: what was drafted with an assistant, what was written and verified by hand.)
+I used Claude Code (Claude Opus) as a pair programmer throughout.
+
+- **Drafted with the assistant:** the MCP server and tools, the VTpass integration, the forecast logic, the unit and smoke tests, the Dockerfile and Cloud Run deploy script, and first drafts of the field notes, this README and the go-live note. [CONFIRM: the pre-clock server was also drafted with the assistant.]
+- **Run and checked live:** every VTpass behaviour in the field notes comes from real sandbox calls with the raw JSON kept, not from the docs. The assistant also worked through the Chord dashboard in my browser (Connected apps, teammate, MCP server, Health and Tools checks).
+- **Mine:** choosing the problem and the shop, every decision on trade-offs (hosting, autonomy, the purchase time budget, demo plan), all account sign-ins and consent screens, pasting secrets, and running the deploys. Claude Code's permission check blocked the assistant from sending secrets to Cloud Run itself, so I ran the deploy script. I reviewed each change before it was committed. [CONFIRM wording.]
