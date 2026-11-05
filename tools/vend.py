@@ -47,7 +47,7 @@ def _ref() -> str:
 class MockVend:
     """Behaviour is driven by the meter number so every path is demoable:
       ends in 00  -> invalid_meter
-      ends in 11  -> timeout
+      ends in 11  -> timeout       (requery: still pending once, then resolves)
       ends in 22  -> paid_no_token (requery: still pending once, then resolves)
       ends in 33  -> declined
       anything else -> ok
@@ -79,7 +79,8 @@ class MockVend:
         self.store = store  # holds the requery counter so it survives restarts
 
     def requery(self, reference: str) -> VendResult:
-        """...22 meters stay pending on the first requery and resolve on the second."""
+        """Timeouts (...11) and paid_no_token (...22) stay pending on the first requery and resolve on the
+        second, so the "still pending, escalate to the owner" step can be shown."""
         orig = next((r for r in self.store.rows("tokens") if r.get("reference") == reference), None) if self.store else None
         if orig is None:
             return VendResult("declined", reference, "", 0.0,
@@ -87,7 +88,7 @@ class MockVend:
         meter_no, amount = str(orig["meter_no"]), float(orig["amount_ngn"] or 0)
         self.store.append("requeries", {"ts": _now(), "reference": reference})
         tries = sum(1 for r in self.store.rows("requeries") if r.get("reference") == reference)
-        if meter_no.endswith("22") and tries < 2:
+        if meter_no.endswith(("11", "22")) and tries < 2:
             return VendResult("paid_no_token", reference, meter_no, amount, error="Still pending at DisCo")
         units = round(amount / self.TARIFF_NGN_PER_KWH, 1)
         token = "-".join("".join(random.choices(string.digits, k=4)) for _ in range(5))

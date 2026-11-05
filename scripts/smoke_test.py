@@ -50,7 +50,8 @@ def tools_in_process():
     second = s.check_vend(refs["paid_no_token"])
     check("check_vend ...22 first call still pending", first["status"] == "paid_no_token")
     check("check_vend ...22 second call resolves", second["status"] == "ok" and bool(second["token"]))
-    check("check_vend timeout resolves", s.check_vend(refs["timeout"])["status"] == "ok")
+    check("check_vend timeout first call still pending", s.check_vend(refs["timeout"])["status"] == "paid_no_token")
+    check("check_vend timeout second call resolves", s.check_vend(refs["timeout"])["status"] == "ok")
     check("check_vend unknown reference -> declined", s.check_vend("NOPE")["status"] == "declined")
 
 

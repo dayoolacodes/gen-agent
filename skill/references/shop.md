@@ -22,13 +22,13 @@
 
 The live tool server uses the VTpass sandbox, where 1111111111111 verifies and returns a token. Other numbers are rejected as invalid meters.
 
-When the tool server runs the mock provider instead (one demo take), the outcome comes from the last two digits:
+When the tool server runs the mock provider instead (one demo take), the outcome comes from the last two digits. The shop meter 1111111111111 ends in 11, so under the mock it gives the timeout path:
 
 | Meter number  | Outcome        |
 |---------------|----------------|
 | 62101234567   | ok, token issued |
 | 62101234500   | invalid_meter  |
-| 62101234511   | timeout        |
+| 62101234511   | timeout; first check_vend still pending, second gives the token |
 | 62101234522   | paid_no_token; first check_vend still pending, second gives the token |
 | 62101234533   | declined       |
 
