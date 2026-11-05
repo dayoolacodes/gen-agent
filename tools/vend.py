@@ -16,6 +16,7 @@ import os
 import random
 import re
 import string
+import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -111,13 +112,20 @@ class VTPassVend:
         self.headers = {"api-key": os.environ["VTPASS_API_KEY"], "secret-key": os.environ["VTPASS_SECRET_KEY"]}
         self.service_id = os.getenv("VTPASS_SERVICE_ID", "ikeja-electric")
         self.variation = os.getenv("VTPASS_VARIATION", "prepaid")
-        self.timeout = float(os.getenv("VTPASS_TIMEOUT_S", "30"))
+        self.timeout = float(os.getenv("VTPASS_TIMEOUT_S", "30"))  # single calls: requery, standalone checks
+        # Chord abandons a tool call at 60s. buy() must finish well inside that, leaving room for a cold
+        # start (about 8.5s) and the Sheet writes in server.buy_units (about 3s).
+        self.budget = float(os.getenv("VTPASS_BUY_BUDGET_S", "40"))
 
-    def _post(self, path: str, payload: dict):
+    VERIFY_TIMEOUT_S = 8.0
+    BALANCE_TIMEOUT_S = 5.0
+    MIN_PAY_TIMEOUT_S = 10.0  # below this, do not start a payment we may not hear back from
+
+    def _post(self, path: str, payload: dict, timeout: float | None = None):
         """Returns parsed JSON, or None if the body was empty or not JSON. Raises httpx errors."""
         import httpx
 
-        r = httpx.post(f"{self.base}/{path}", json=payload, headers=self.headers, timeout=self.timeout)
+        r = httpx.post(f"{self.base}/{path}", json=payload, headers=self.headers, timeout=timeout or self.timeout)
         try:
             return r.json()
         except ValueError:
@@ -129,25 +137,25 @@ class VTPassVend:
         stamp = datetime.now(ZoneInfo("Africa/Lagos")).strftime("%Y%m%d%H%M")
         return stamp + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-    def wallet_balance(self) -> float | None:
+    def wallet_balance(self, timeout: float | None = None) -> float | None:
         """VTpass wallet balance in NGN, or None if it could not be read. GET, so api-key + public-key.
         Note the different envelope: {"code":1,"contents":{"balance":"..."}}."""
         import httpx
 
         try:
-            r = httpx.get(f"{self.base}/balance", timeout=self.timeout,
+            r = httpx.get(f"{self.base}/balance", timeout=timeout or self.timeout,
                           headers={"api-key": self.headers["api-key"], "public-key": os.environ["VTPASS_PUBLIC_KEY"]})
             return float(r.json()["contents"]["balance"])
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             return None
 
-    def verify_meter(self, meter_no: str) -> dict:
+    def verify_meter(self, meter_no: str, timeout: float | None = None) -> dict:
         """Check the meter with the DisCo before paying. Returns {valid, name, error}."""
         import httpx
 
         try:
             data = self._post("merchant-verify", {"billersCode": meter_no, "serviceID": self.service_id,
-                                                  "type": self.variation})
+                                                  "type": self.variation}, timeout)
         except httpx.HTTPError as e:
             return {"valid": False, "reachable": False, "error": f"Could not reach provider to verify meter: {e}"}
         content = (data or {}).get("content") or {}
@@ -161,24 +169,31 @@ class VTPassVend:
     def buy(self, meter_no: str, amount_ngn: float) -> VendResult:
         import httpx
 
+        deadline = time.monotonic() + self.budget
         ref = self._request_id()
-        v = self.verify_meter(meter_no)
+        v = self.verify_meter(meter_no, self.VERIFY_TIMEOUT_S)
         if not v["valid"]:
             # pay is never called on this path, so nothing can have been charged.
             status = "invalid_meter" if v["reachable"] else "declined"
             return VendResult(status, ref, meter_no, amount_ngn,
                               error=v["error"] + ". Payment was not attempted, so no money was taken.")
-        before = self.wallet_balance()
+        before = self.wallet_balance(self.BALANCE_TIMEOUT_S)
+        # Pay gets what is left of the budget after keeping enough back for the balance check afterwards.
+        pay_timeout = deadline - time.monotonic() - self.BALANCE_TIMEOUT_S
+        if pay_timeout < self.MIN_PAY_TIMEOUT_S:
+            return VendResult("declined", ref, meter_no, amount_ngn,
+                              error="Provider too slow to start a payment safely inside the time limit. "
+                                    "Payment was not attempted, so no money was taken. Try again in a few minutes.")
         payload = {"request_id": ref, "serviceID": self.service_id, "billersCode": meter_no,
                    "variation_code": self.variation, "amount": amount_ngn,
                    "phone": os.getenv("VTPASS_PHONE", "08011111111")}
         try:
-            res = self._map(self._post("pay", payload), ref, meter_no, amount_ngn)
+            res = self._map(self._post("pay", payload, pay_timeout), ref, meter_no, amount_ngn)
         except httpx.TimeoutException:
-            res = VendResult("timeout", ref, meter_no, amount_ngn, error=f"Provider did not answer in {self.timeout:.0f}s")
+            res = VendResult("timeout", ref, meter_no, amount_ngn, error=f"Provider did not answer in {pay_timeout:.0f}s")
         except httpx.HTTPError as e:
             res = VendResult("timeout", ref, meter_no, amount_ngn, error=f"Connection to provider failed: {e}")
-        return self._settle(res, before, self.wallet_balance())
+        return self._settle(res, before, self.wallet_balance(self.BALANCE_TIMEOUT_S))
 
     @staticmethod
     def _settle(res: VendResult, before: float | None, after: float | None) -> VendResult:

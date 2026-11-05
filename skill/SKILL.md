@@ -33,6 +33,7 @@ If a message is ambiguous (no number, or you cannot tell diesel from meter), ask
    - Only say "no money was taken" when the error in the result says so. If it does not, say you cannot confirm yet.
    - timeout or paid_no_token → say money may have been taken but no token has arrived yet. Give the reference. Tell them you will check again, then call check_vend(reference). If it is still pending, escalate to Adaeze with the reference and say not to buy again until this is resolved.
 5. Never invent a token. If the tool did not return one, there is no token.
+6. Never call buy_units again for a purchase that might already have gone through. If an earlier attempt came back timeout or paid_no_token, call check_vend with its reference first. If the buy_units call itself failed with no result at all, do not buy again: tell Adaeze a purchase may be in progress and that nobody should retry until she has checked the tokens sheet.
 
 ## Alerts and the morning briefing
 
