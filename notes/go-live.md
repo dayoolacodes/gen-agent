@@ -9,7 +9,8 @@
 - Server: smoke test passes on the live URL (/health, 401 without a token, discovery, every tool, every mock vend outcome). 13 unit tests pass (token and units parsing, purchase time budget, forecast from today).
 - VTpass sandbox: real vend to meter 1111111111111 returned a token and 79.9 kWh; requery matched.
 - A purchase is bounded to about 52s worst case (cold start included), under Chord's 60s tool timeout.
-- In the simulator: [TO FILL: tool call confirmed, purchase with token, timeout then pending then token via check_vend, briefing on request, anything that failed].
+- In Chord (direct line, 5 Nov): "how are we doing on fuel?" called `get_energy_summary` (531ms; Cloud Run logged the tool list and the tool call). This confirmed the teammate can use the workspace MCP server even though its Tools list does not show it. It also showed the seed data had gone stale, which led to the forecast fix and a reseed. Skill v2 and server revision `energy-mcp-00006-fzj` are live.
+- In the simulator: [TO FILL after the test run: purchase with token, timeout then pending then token via check_vend, briefing on request, anything that failed].
 
 **Known limits.**
 - Sandbox only. The "paid but no token" path was shown with the mock provider, because VTpass's pending test meter fails verification before payment.
