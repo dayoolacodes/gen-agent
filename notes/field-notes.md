@@ -113,3 +113,9 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - How I found the cause: searched the teammate page and the Admin pages for any schedule control.
 - Fix or workaround: the 07:00 schedule is created by one chat message during the planned test run, at the end of the window, so it does not burn credits on mornings nobody can see (the simulator cannot receive scheduled tasks anyway). The briefing content is demoed by asking for it in chat.
 - What I'd change: an "Add briefing" button in Briefings & schedule (time, timezone, prompt), and a note on how many credits a scheduled run costs.
+
+### (5 Nov) First message: workspace MCP tools work without a per-teammate grant, but the seed data had gone stale
+- What happened: in Energy Manager's direct line I sent "how are we doing on fuel?". "How I did this" showed one step, `mcp__energy-tools__get_energy_summary`, 531ms. Cloud Run logs at 05:21 UTC show `ListToolsRequest` (6.85s, cold start: "Starting new instance. Reason: AUTOSCALING") then `CallToolRequest` (0.42s). So a teammate can call a workspace MCP server even though its own Tools list does not show it. The credit counter still read 50 afterwards.
+- Second finding: the reply said "24 litres on hand ... roughly 2 days left. No purchases logged in the last 7 days." The seed was written on 28 Oct, eight days earlier, so purchases had aged out of the 7-day window while the 8-day-old tank and meter readings were still reported as current. That is the elapsed-time gap in the forecast: days left are counted from the last reading, not from today.
+- Fix or workaround: see the next commit. Reseed close to the demo, and the forecast should subtract the burn since the last reading.
+- What I'd change: nothing in Chord. The tool-call trace with timings in "How I did this" made this quick to confirm.
