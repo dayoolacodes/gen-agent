@@ -34,19 +34,25 @@ then sets `MCP_ALLOWED_HOSTS` to both Cloud Run hostnames. Without that, every M
 For a quick test from a laptop, `ngrok http 8000` works too; set `MCP_ALLOWED_HOSTS` to the ngrok hostname
 and restart. `render.yaml` is kept as an alternative but has not been deployed.
 
-## Register in Chord
+## Register in Chord (as done on 5 Nov, dashboard at www.chordhq.xyz)
 
-Chord app: Teammate settings -> Tools -> Add tool, or via API
-(`POST /v1/workspaces/{ws}/mcp-servers`) with
-`{"name":"energy-tools","url":"https://<host>/mcp","auth_type":"bearer","auth_token":"<MCP_BEARER_TOKEN>","transport":"streamable_http"}`.
-Then run tool discovery (`POST .../mcp-servers/{id}/tools`) and health (`POST .../health`);
-check `status` in the health body, not just HTTP 200.
+1. Admin -> Channels & Tools -> Tools tab -> Custom tools (MCP) -> Add server. (The "Add tool" link in a
+   teammate's settings sends you here.) Name `energy-tools`, URL `https://<host>/mcp`, Auth type `bearer`,
+   Auth token = `MCP_BEARER_TOKEN` (no "Bearer " prefix), Transport `streamable_http`, Allowed tools blank.
+2. The server row's menu has Health and Tools. Health showed `ok · 5733 ms` on a cold instance; Tools listed
+   all six. The same is available over the API (`POST /v1/workspaces/{ws}/mcp-servers`, then `.../tools`
+   and `.../health`; check `status` in the health body, not just HTTP 200).
 
 ## Skill
 
-Upload `skill/` as a folder or ZIP. Mark `SKILL.md` as Instructions. Publish, then test in-app
-with: `bought 25 litres diesel 32,500` / `tank at about 15 litres` / `meter showing 1200` / `how are we doing on fuel` /
-`buy 5000 units`.
+Home -> Create a teammate -> upload `skill/` as a ZIP (SKILL.md and references/shop.md at the root).
+Chord marks `SKILL.md` as Instructions on its own. Teammate: name "Energy Manager", role "Power and fuel for
+Adaeze Provisions", autonomy "Act independently" (purchases are still gated by the skill's confirm step).
+
+For the WhatsApp simulator: Admin -> Connected apps -> enable "Allow approved apps" and allow
+"Whatsapp Simulator", then sign in at chat.tsglabs.dev and approve the access request.
+Test messages: `bought 25 litres diesel 32,500` / `tank at about 15 litres` / `meter showing 1200` /
+`how are we doing on fuel` / `buy 5000 units`.
 
 ## Demo meter numbers (mock provider)
 
