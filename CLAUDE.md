@@ -32,7 +32,8 @@ A Lagos provisions store (fictional: Adaeze Provisions, Surulere) runs a diesel 
 - Repo: private, `github.com/dayoolacodes/gen-agent`.
 
 ## Still to do (in order)
-1. On Chord credits: register the MCP server with the Cloud Run URL above (auth_type bearer, `MCP_BEARER_TOKEN`), run tool discovery and health check, upload and publish the skill, get a first in-app reply.
+1. Chord setup DONE 5 Nov (no credits used): Connected apps enabled and simulator approved; teammate "Energy Manager" (id ffea5a31-7db9-4f93-b21d-74c808f9f313, autonomy Act independently) with skill v1; MCP server `energy-tools` added under Admin > Channels & Tools > Tools, Health ok, six tools discovered. Open question: the teammate's Tools list does not show energy-tools, so whether it can call it is confirmed only by the first chat message.
+   Testing rule: every chat message costs credits (50 total). Do all non-chat work first, then one planned test run.
 2. Full WhatsApp simulator conversation incl. a buy with token, and the paid_no_token path with check_vend (use the mock meter ...22 or note why VTpass sandbox cannot produce it).
 3. Schedule for the morning briefing. Watch for cold-start timeouts at 07:00; `--min-instances 1` if needed.
 4. Field notes as problems happen. Go-live note (half page). README "AI tools used". 3-minute recording.
