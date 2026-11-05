@@ -20,6 +20,8 @@ A Lagos provisions store (fictional: Adaeze Provisions, Surulere) runs a diesel 
 - Agent must be built and run on Chord. Leave it live for reviewers.
 - AI tools are allowed; the README must say briefly how they were used.
 - 5-day window starts when Chord credits and simulator access arrive, not before.
+- Credits arrived (email received by 5 Nov). Simulator: chat.tsglabs.dev, after enabling Admin Panel > Connections > Connected Apps > Allow Approved Apps in the Chord dashboard.
+- Chord tool-call timeout is 60s (TSG Labs). The simulator cannot receive scheduled tasks, so demo the briefing by asking for it in chat; show the schedule configured in the dashboard.
 
 ## Done so far
 - MCP server with six tools (log_fuel, log_diesel_on_hand, log_meter_reading, get_energy_summary, buy_units, check_vend), bearer auth, /health. `mcp` pinned to 1.26.0.
