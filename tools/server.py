@@ -25,6 +25,7 @@ vend = get_provider(store)
 GEN_LITRES_PER_HOUR = float(os.getenv("GEN_LITRES_PER_HOUR", "1.8"))  # 7.5kVA diesel at half load, rough
 MAX_UNATTENDED_NGN = float(os.getenv("MAX_UNATTENDED_NGN", "20000"))
 DIESEL_ALERT_DAYS = float(os.getenv("DIESEL_ALERT_DAYS", "1"))
+STALE_READING_DAYS = float(os.getenv("STALE_READING_DAYS", "2"))  # older than this: ask staff for a fresh one
 
 # FastMCP's DNS-rebinding guard only accepts localhost Host headers by default, so behind ngrok or
 # Render every request gets 421 "Invalid Host header". List the public host(s), comma-separated,
@@ -76,7 +77,9 @@ def log_diesel_on_hand(litres: float, logged_by: str = "staff", note: str = "") 
 @mcp.tool()
 def get_energy_summary(days: int = 7) -> dict:
     """Summarise diesel spend and meter trend over the last N days, with projected days until diesel
-    and prepaid units run out. Use for 'how much have we spent', 'are we running low', daily briefings."""
+    and prepaid units run out. Use for 'how much have we spent', 'are we running low', daily briefings.
+    on_hand_litres and units_now are estimates for right now: the last reading minus what has been
+    used since. last_reading_days_ago says how old that reading is."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
     rows = store.rows("energy")
     diesel = [r for r in rows if r.get("type") == "diesel" and _ts(r) >= since]
@@ -90,17 +93,25 @@ def get_energy_summary(days: int = 7) -> dict:
     est_hours_run = litres_per_day / GEN_LITRES_PER_HOUR if GEN_LITRES_PER_HOUR else 0
 
     burn = _diesel_litres_per_day(rows) or (round(litres_per_day, 2) if litres_per_day else None)
-    on_hand = _diesel_on_hand(rows)
+    on_hand, tank_age = _diesel_on_hand(rows, burn)
     diesel_days_left = round(on_hand / burn, 1) if on_hand is not None and burn else None
 
-    meter_now = float(meters[-1]["meter_units"]) if meters else None
     units_per_day = _units_per_day(meters)
+    meter_now, meter_age = _units_now(meters, units_per_day)
     days_units_left = round(meter_now / units_per_day, 1) if meter_now is not None and units_per_day else None
 
     alerts = []
-    if days_units_left is not None and days_units_left < 3:
+    if on_hand == 0:
+        alerts.append("Diesel has probably run out by now (estimate from the last tank reading)")
+    if meter_now == 0:
+        alerts.append("Prepaid units have probably run out by now (estimate from the last meter reading)")
+    if tank_age is not None and tank_age > STALE_READING_DAYS:
+        alerts.append(f"Tank level last reported {tank_age:.0f} days ago; ask staff for a fresh reading")
+    if meter_age is not None and meter_age > STALE_READING_DAYS:
+        alerts.append(f"Meter last read {meter_age:.0f} days ago; ask staff for a fresh reading")
+    if meter_now and days_units_left is not None and days_units_left < 3:
         alerts.append(f"Prepaid units will run out in about {days_units_left} days")
-    if diesel_days_left is not None and diesel_days_left < DIESEL_ALERT_DAYS:
+    if on_hand and diesel_days_left is not None and diesel_days_left < DIESEL_ALERT_DAYS:
         alerts.append(f"Diesel will run out in about {diesel_days_left} days")
     if daily_spend and daily_spend * 7 > float(os.getenv("WEEKLY_DIESEL_BUDGET_NGN", "150000")):
         alerts.append("Diesel spend is above the weekly budget")
@@ -111,8 +122,10 @@ def get_energy_summary(days: int = 7) -> dict:
         "window_days": days,
         "diesel": {"litres": litres, "spend_ngn": spend, "daily_spend_ngn": daily_spend,
                    "est_gen_hours_per_day": round(est_hours_run, 1), "purchases": len(diesel),
-                   "on_hand_litres": on_hand, "litres_per_day": burn, "days_left": diesel_days_left},
-        "meter": {"units_now": meter_now, "units_per_day": units_per_day, "days_left": days_units_left},
+                   "on_hand_litres": on_hand, "litres_per_day": burn, "days_left": diesel_days_left,
+                   "last_reading_days_ago": tank_age},
+        "meter": {"units_now": meter_now, "units_per_day": units_per_day, "days_left": days_units_left,
+                  "last_reading_days_ago": meter_age},
         "alerts": alerts,
     }
 
@@ -181,14 +194,32 @@ def _diesel_litres_per_day(rows: list[dict]) -> float | None:
     return round(used / span_days, 2) if span_days else None
 
 
-def _diesel_on_hand(rows: list[dict]) -> float | None:
-    """Last tank reading plus anything bought since. None if nobody has reported the tank yet."""
+def _age_days(r: dict) -> float:
+    return max((datetime.now(timezone.utc) - _ts(r)).total_seconds() / 86400, 0.0)
+
+
+def _diesel_on_hand(rows: list[dict], burn: float | None) -> tuple[float | None, float | None]:
+    """Estimated litres right now: last tank reading + litres bought since - burn since, floored at 0.
+    Returns (litres, age of the tank reading in days). (None, None) if nobody has reported the tank yet."""
     levels = sorted([r for r in rows if r.get("type") == "diesel_level"], key=_ts)
     if not levels:
-        return None
+        return None, None
     last = levels[-1]
+    age = _age_days(last)
     bought = sum(float(r["litres"] or 0) for r in rows if r.get("type") == "diesel" and _ts(r) > _ts(last))
-    return round(float(last["litres"]) + bought, 1)
+    est = float(last["litres"]) + bought - (burn or 0) * age
+    return round(max(est, 0.0), 1), round(age, 1)
+
+
+def _units_now(meters: list[dict], units_per_day: float | None) -> tuple[float | None, float | None]:
+    """Estimated units right now: last meter reading - usage since, floored at 0.
+    Returns (units, age of the reading in days). (None, None) if there are no readings."""
+    if not meters:
+        return None, None
+    last = meters[-1]
+    age = _age_days(last)
+    est = float(last["meter_units"]) - (units_per_day or 0) * age
+    return round(max(est, 0.0), 1), round(age, 1)
 
 
 def _log_top_up(res) -> None:
@@ -199,7 +230,8 @@ def _log_top_up(res) -> None:
     meters = sorted([r for r in store.rows("energy") if r.get("type") == "meter"], key=_ts)
     if not meters:
         return
-    units = round(float(meters[-1]["meter_units"]) + float(res.units), 1)
+    now_est, _ = _units_now(meters, _units_per_day(meters))  # the old reading has been used since
+    units = round(now_est + float(res.units), 1)
     store.append("energy", {"ts": now_iso(), "type": "meter", "litres": "", "cost_ngn": "",
                             "meter_units": units, "logged_by": "system", "note": f"top-up {res.reference}"})
 

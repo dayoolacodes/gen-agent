@@ -14,7 +14,7 @@
 **Known limits.**
 - Sandbox only. The "paid but no token" path was shown with the mock provider, because VTpass's pending test meter fails verification before payment.
 - The 07:00 briefing is scheduled, but the simulator cannot show scheduled tasks, so the demo asks for it in chat.
-- Days left are counted from the latest reading, so they read slightly high until the next reading is logged.
+- Stock on hand is an estimate from the last reading and the usual burn. If staff stop sending readings, the agent says the reading is old and asks for a new one.
 - Each Chord message uses credits.
 
 **What to watch.**

@@ -2,6 +2,7 @@
 
     python scripts/seed_sheet.py          # writes to the Sheet if SHEET_ID + credentials are set, else data/store.json
     python scripts/seed_sheet.py --force  # write even if the energy tab already has rows
+    python scripts/seed_sheet.py --reset  # delete earlier seed rows first, then write a fresh week ending now
 
 Times are relative to now and end a few hours ago. Every row has note "seed" so it can be filtered out.
 Shape: about 29 kWh a day off the meter with one NGN 20,000 top-up, about 12 litres of diesel a day,
@@ -39,7 +40,9 @@ HISTORY = [
 def main():
     store = get_store()
     print(f"store: {type(store).__name__}")
-    if store.rows("energy") and "--force" not in sys.argv:
+    if "--reset" in sys.argv:
+        print(f"removed {store.delete_where('energy', 'note', 'seed')} old seed rows")
+    elif store.rows("energy") and "--force" not in sys.argv:
         sys.exit("energy tab already has rows; rerun with --force to add the seed anyway")
     now = datetime.now(timezone.utc)
     for hours, kind, litres, cost, units, who in HISTORY:

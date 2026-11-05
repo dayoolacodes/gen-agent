@@ -53,6 +53,14 @@ class JsonStore:
         self._save(data)
         return hit
 
+    def delete_where(self, tab: str, key: str, value: str) -> int:
+        data = self._load()
+        rows = data.get(tab, [])
+        keep = [r for r in rows if str(r.get(key)) != str(value)]
+        data[tab] = keep
+        self._save(data)
+        return len(rows) - len(keep)
+
 
 class SheetsStore:
     """Requires gspread, a service account, and the Sheet shared with the service account's email.
@@ -100,6 +108,14 @@ class SheetsStore:
                         ws.update_cell(i, headers.index(k) + 1, str(v))
                 hit = True
         return hit
+
+    def delete_where(self, tab: str, key: str, value: str) -> int:
+        ws = self.sh.worksheet(tab)
+        records = ws.get_all_records(numericise_ignore=["all"])
+        hits = [i for i, r in enumerate(records, start=2) if str(r.get(key)) == str(value)]
+        for i in reversed(hits):  # bottom up, so earlier row numbers stay valid
+            ws.delete_rows(i)
+        return len(hits)
 
 
 def get_store():
