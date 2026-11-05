@@ -107,3 +107,9 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - How I found the cause: worked through the dashboard in the browser and read each page's text.
 - Fix or workaround: README updated with the real click path. Whether Energy Manager can call workspace MCP tools without a per-teammate grant is not confirmed yet. Checking needs a chat message, which costs credits, so it is the first thing in the test run.
 - What I'd change: show custom MCP servers in each teammate's Tools list with a toggle, or say on the teammate page that workspace MCP servers apply to every teammate. Use the frontmatter `name` as the skill title.
+
+### (5 Nov) No way to create a schedule without spending credits
+- What happened: the teammate's Settings panel (Tools and connections -> Channels) has a "Briefings & schedule" section that only says "No scheduled briefings.", with no add button. Admin -> Channels & Tools -> Developer has webhooks, outbound "API credentials" for REST tools, and a route tester, but no key for Chord's own API, so the `POST /v1/teammates/{id}/schedules` route I had noted from the docs cannot be called from here. The only remaining way is to ask the teammate in chat, which costs credits, and every daily run will cost credits too. Dashboard build: 0.15.22 (build 0000000027, commit c71c07e4adc8), Required Core 0.16.0.0.
+- How I found the cause: searched the teammate page and the Admin pages for any schedule control.
+- Fix or workaround: the 07:00 schedule is created by one chat message during the planned test run, at the end of the window, so it does not burn credits on mornings nobody can see (the simulator cannot receive scheduled tasks anyway). The briefing content is demoed by asking for it in chat.
+- What I'd change: an "Add briefing" button in Briefings & schedule (time, timezone, prompt), and a note on how many credits a scheduled run costs.
