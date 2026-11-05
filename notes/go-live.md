@@ -6,7 +6,7 @@
 
 **Checked before go-live.**
 - Chord: Health `ok`, tool discovery lists all six tools.
-- Server: smoke test passes on the live URL (/health, 401 without a token, discovery, every tool, every mock vend outcome). 9 unit tests pass (token and units parsing, purchase time budget).
+- Server: smoke test passes on the live URL (/health, 401 without a token, discovery, every tool, every mock vend outcome). 13 unit tests pass (token and units parsing, purchase time budget, forecast from today).
 - VTpass sandbox: real vend to meter 1111111111111 returned a token and 79.9 kWh; requery matched.
 - A purchase is bounded to about 52s worst case (cold start included), under Chord's 60s tool timeout.
 - In the simulator: [TO FILL: tool call confirmed, purchase with token, timeout then pending then token via check_vend, briefing on request, anything that failed].
