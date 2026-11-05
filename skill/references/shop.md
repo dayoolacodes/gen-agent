@@ -8,7 +8,7 @@
 
 - Generator: 7.5kVA diesel, runs roughly 6 to 8 hours a day during outages, about 1.8 litres per hour.
 - Diesel usually bought in 20 to 25 litre jerrycans from the filling station on Adelabu Street.
-- Prepaid meter: Ikeja Electric, meter number 62101234567 (test number; MockVend treats it as valid).
+- Prepaid meter: Ikeja Electric, meter number 1111111111111 (VTpass sandbox test meter; use this for every purchase).
 - Tariff: about NGN 225 per kWh (Band A). Units are kWh.
 - Weekly diesel budget: NGN 150,000. Above that, Adaeze wants to know.
 
@@ -18,9 +18,11 @@
 - Warn when diesel is projected to run out within 1 day.
 - Warn when diesel spend is on track to exceed the weekly budget.
 
-## Test meter numbers for the demo
+## Test meter numbers (for builders, not for staff)
 
-The mock vending provider decides the outcome from the last two digits:
+The live tool server uses the VTpass sandbox, where 1111111111111 verifies and returns a token. Other numbers are rejected as invalid meters.
+
+When the tool server runs the mock provider instead (one demo take), the outcome comes from the last two digits:
 
 | Meter number  | Outcome        |
 |---------------|----------------|
