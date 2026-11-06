@@ -21,7 +21,7 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 
 | Item | What it is |
 |---|---|
-| Recording | The simulator conversation, in three parts (see below) |
+| Recording | The simulator conversation, one continuous take (see below) |
 | `field-notes.md` | Problems as they happened, with exact errors. The three marked `[submission]` are the strongest. |
 | `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
 | Code | [REPO LINK OR ZIP] |
