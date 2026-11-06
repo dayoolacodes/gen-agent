@@ -17,14 +17,14 @@ A Chord teammate, "Energy Manager", that staff and the owner simply message on W
 
 Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer auth) → Google Sheet and VTpass sandbox. Test keys and made-up data only.
 
-## In this folder
+## Where everything is
 
-| Item | What it is |
+| Item | Where |
 |---|---|
-| Recording | The simulator conversation |
-| `field-notes.md` | Problems as they happened, with exact errors. Start with the three under "Read these first" at the top. |
-| `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
-| Code | https://github.com/dayoolacodes/gen-agent (public). Also as `gen-agent-code.zip` in this folder. |
+| Demo recording | `Demo recording.mp4`, in this Drive folder (2:51, silent; guide below) |
+| Field notes | https://github.com/dayoolacodes/gen-agent/blob/main/notes/field-notes.md (start with "Read these first" at the top) |
+| Go-live note | https://github.com/dayoolacodes/gen-agent/blob/main/notes/go-live.md |
+| Code | https://github.com/dayoolacodes/gen-agent |
 
 **Try it yourself:** https://chat.tsglabs.dev/c/m9kR88uLaoTOuUUHQY_c55C5
 
