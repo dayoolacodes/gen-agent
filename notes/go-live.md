@@ -2,7 +2,7 @@
 
 **What is live.** A Chord teammate, "Energy Manager" (workspace Dayo, autonomy "Act independently"), that staff and the owner message on WhatsApp. It logs diesel purchases, tank levels and meter readings to a Google Sheet, projects days of diesel and units left, gives a three-line morning briefing, and buys prepaid units through the VTpass sandbox. Its tools come from one MCP server on Google Cloud Run: `https://energy-mcp-210407125100.europe-west1.run.app/mcp` (bearer auth, six tools). All data is made up and all keys are sandbox keys.
 
-**How to try it.** Simulator chat link: [TO FILL after the test run]. Try: "bought 25 litres diesel 32,500", "tank at about 15 litres", "meter showing 98", "how are we doing on fuel", "buy 5000 units" then "yes".
+**How to try it.** Simulator chat link (business "Adaeze Provisions"): https://chat.tsglabs.dev/c/ut37YNbTyU6nXkMZS5JiACTU. Try: "bought 25 litres diesel 32,500", "tank at about 15 litres", "meter showing 98", "how are we doing on fuel", "buy 5000 units" then "yes".
 
 **Checked before go-live.**
 - Chord: Health `ok`, tool discovery lists all six tools.
