@@ -22,7 +22,7 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 | Item | What it is |
 |---|---|
 | Recording | The simulator conversation |
-| `field-notes.md` | Problems as they happened, with exact errors. The three marked `[submission]` are the strongest. |
+| `field-notes.md` | Problems as they happened, with exact errors. Start with the three under "Read these first" at the top. |
 | `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
 | Code | https://github.com/dayoolacodes/gen-agent (public). Also as `gen-agent-code.zip` in this folder. |
 

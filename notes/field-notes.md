@@ -1,16 +1,14 @@
 # Deployment field notes
 
-Write each problem as you hit it. Two or three real ones beat a long list.
+Written as each problem happened, with the exact error text. Each note covers what happened, how I found the cause, the fix or workaround, and what I'd change.
 
-## Template
+## Read these first
 
-### <short title>
-- What happened (include the exact error):
-- How I found the cause:
-- Fix or workaround:
-- What I'd change in Chord, its docs or API:
+1. **The agent replays earlier tool calls on every new message** (6 Nov). It cannot see its own earlier results, so it repeats logs and purchases. I made the server ignore repeats so nobody is charged twice.
+2. **The agent said the schedule was set when it had not called the tool** (6 Nov). Its reply and its actions disagreed; caught from the tool trace.
+3. **Behind ngrok, authenticated MCP calls get 421 Invalid Host header** (28 Oct). The MCP library silently rejects public hostnames, and an unauthenticated health check does not show it.
 
-## Notes
+## All notes
 
 ### mcp Python SDK 2.x renamed FastMCP
 - What happened: `pip install mcp` pulled 2.x; `from mcp.server.fastmcp import FastMCP` raised ModuleNotFoundError pointing at the migration guide. A mixed 1.x/2.x install then broke `mcp.types` imports until the package directory was removed by hand.
@@ -63,7 +61,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Fix or workaround: the agent does not try to reconcile them. It reports what the owner asked to spend, the units bought (parsed from `units`), the token and the reference. That is what Adaeze checks against the meter display. The wallet debit (total_amount) is only used to decide whether money was taken (see the wallet balance note).
 - What I'd change: define `tokenAmount` in the docs, and return units as a number, not a string with "kWh" appended.
 
-### [submission] (28 Oct) Behind ngrok, authenticated MCP calls get 421 Invalid Host header
+### (28 Oct) Behind ngrok, authenticated MCP calls get 421 Invalid Host header
 - What happened: with the server exposed through `ngrok http 8000`, `GET /health` returned 200 and `POST /mcp` without a token returned 401, so the tunnel looked healthy. MCP tool discovery with the bearer token then failed with `httpx.HTTPStatusError: Client error '421 Misdirected Request'`. Repeating the initialize call with curl gave the body `Invalid Host header`. Locally on 127.0.0.1 everything passed.
 - How I found the cause: grepped the installed SDK for the message. In mcp 1.26.0, `FastMCP(...)` defaults to `host="127.0.0.1"`, and for that host it silently enables `TransportSecuritySettings` with `allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"]` (mcp/server/fastmcp/server.py, around line 178). The process was listening on 0.0.0.0 through uvicorn, but FastMCP did not know that, so the public Host header was rejected. The 401 check passed only because our bearer middleware runs before the SDK's host check, which is why the unauthenticated smoke test missed it. The allowlist matches exact hosts or `host:*` ports only, so `*.ngrok-free.app` cannot be allowed.
 - Fix: kept the protection on and added `MCP_ALLOWED_HOSTS` (comma-separated, exact hostnames) to the localhost defaults. Set it to the ngrok hostname in `.env`, restarted, and discovery through the public URL lists all six tools. Added it to `.env.example`, `render.yaml` and the README. A free ngrok hostname changes on restart, so this has to be updated each time, or use a reserved domain.
@@ -127,7 +125,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Later the same day: the chat page has a "Start a new conversation" button (circular arrow, top right). Using it for the final take also replaced the link: the old one then showed "Link not active" and the agents page listed `/c/m9kR88uLaoTOuUUHQY_c55C5`. So every reset, by either route, breaks the link already shared.
 - What I'd change: a reset that keeps the link, and a label on that arrow, which reads as "refresh".
 
-### [submission] (6 Nov) Chord's agent replays earlier write tool calls on every new message
+### (6 Nov) Chord's agent replays earlier write tool calls on every new message
 - What happened: in the recorded simulator take, message 1 ("Bought 20litres diesel 26,000") logged one row and the agent replied "Logged". On message 2 ("tank at about 30liters") it replied "I need to correct my earlier reply. I said the purchase was logged, but it hadn't been recorded yet. It is now." and logged the diesel again plus the tank. On message 3 ("meter showing 85") it logged the diesel, the tank and the meter again. The Sheet ended with the 20 L purchase three times and the tank twice.
 - How I found the cause: Cloud Run logs show one CallToolRequest at 01:22:31, two at 01:23:00, and three at 01:23:40-42 (plus one at 01:23:45). The number of write calls grows by one per turn, and the agent's own words show it could not see its earlier tool results. Each turn starts without the previous turns' tool results, so the model "catches up" by redoing them. With buy_units this would be a second purchase on the next message.
 - Fix: made the server safe against replays, since the agent cannot be relied on to remember. An identical log (same type, values and sender) within 30 minutes (`DEDUPE_MINUTES`) is not added again and returns `already_logged` with the original time. An identical purchase (same meter and amount) within 30 minutes that may have taken money returns `already_bought` with the earlier status, reference and token, and is not bought again. A declined or invalid-meter attempt can be retried. SKILL.md now says to act only on the newest message and never redo earlier logs or purchases. Tests in `tests/test_dedupe.py`. On the next take the Sheet stayed clean, but the agent still replayed and then narrated the server's answer to the customer: "Correction to my last message: the 20 litres purchase (NGN 26,000) was already recorded earlier, so nothing was added twice." Skill v4 tells it to stay silent about already_logged and to treat already_bought as the answer only when the newest message is about that purchase. The take was abandoned, the replayed rows deleted, and a new chat link issued.
@@ -153,7 +151,7 @@ Write each problem as you hit it. Two or three real ones beat a long list.
 - Sheets quota: clearing the previous take (deleting rows one by one, then reseeding) hit `APIError: [429]: Quota exceeded for quota metric 'Read requests' and limit 'Read requests per minute per user' of service 'sheets.googleapis.com'`. The live server uses the same service account, so for about 30 seconds its tool calls would have failed too. SheetsStore reads whole tabs on every call, and the replay protection adds a read per write. That is fine for one shop at a few messages a minute, but a shared service account and per-call full reads would not survive more than a handful of shops. Next step would be a short in-process cache or one service account per tenant.
 - Reminder: the chat-created reminder showed "Cancel" and "Run now"; after Cancel it showed only "Archive", and archiving removed it. The teammate's "Briefings & schedule" section said "No scheduled briefings." the whole time the reminder existed, so the two views disagree. The reminder's platform is "Direct Line", which matches TSG Labs' note that the simulator cannot receive scheduled tasks.
 
-### [submission] (6 Nov) The agent said the schedule was set when it had not called the tool
+### (6 Nov) The agent said the schedule was set when it had not called the tool
 - What happened: in the final recorded take, "send me the morning briefing everyday at 7am lagos time" got "Done. You'll get the morning briefing every day at 7:00 AM Lagos time, starting today." Afterwards the teammate showed no reminder, and that reply in the dashboard had no "How I did this" steps at all, so no tool was called. Earlier the same day the same request in the simulator had created a reminder.
 - How I found the cause: checked the teammate for a reminder after the take (none), then opened the conversation in the dashboard and expanded the reply's steps (none). Sent the same request in the Direct Line: that reply showed `schedule_reminder` "reminder created (daily at 07:00 Africa/Lagos)", and the reminder appeared on reload.
 - Fix or workaround: the reminder now exists (created from the Direct Line). The recording still shows the false "Done", and the go-live note says so. The general lesson matches the replay problem: what the agent says it did and what its tools did can differ, so checks have to look at tool traces and data, not the reply. For anything that matters (money, schedules) the confirmation text should come from the tool result.
