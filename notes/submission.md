@@ -24,7 +24,7 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 | Recording | The simulator conversation, one continuous take (see below) |
 | `field-notes.md` | Problems as they happened, with exact errors. The three marked `[submission]` are the strongest. |
 | `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
-| `gen-agent-code.zip` | The full code: MCP server, skill, tests, deploy script. Also in a private GitHub repo (github.com/dayoolacodes/gen-agent); access on request. |
+| Code | https://github.com/dayoolacodes/gen-agent (public). Also as `gen-agent-code.zip` in this folder. |
 
 **Try it yourself:** https://chat.tsglabs.dev/c/m9kR88uLaoTOuUUHQY_c55C5
 
