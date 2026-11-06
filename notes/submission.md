@@ -21,7 +21,7 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 
 | Item | What it is |
 |---|---|
-| Recording | The simulator conversation, one continuous take (see below) |
+| Recording | The simulator conversation |
 | `field-notes.md` | Problems as they happened, with exact errors. The three marked `[submission]` are the strongest. |
 | `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
 | Code | https://github.com/dayoolacodes/gen-agent (public). Also as `gen-agent-code.zip` in this folder. |
@@ -30,7 +30,7 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 
 ## What you're watching in the recording
 
-One continuous take, with the chat on the left and the owner's Google Sheet on the right.
+Chat on the left, the owner's Google Sheet on the right.
 
 1. **Everyday use (VTpass sandbox).** Diesel purchase, tank level and meter reading, each logged once as a new row. The agent raises two alerts: units run out in about 2.8 days, and diesel spend is over the weekly budget (NGN 152,250 against 150,000).
 2. **A real purchase.** It checks naira against units, then buys NGN 5,000 (79.9 kWh). VTpass took about 20s, so the simulator shows "The agent didn't answer" although the purchase succeeded. "yes" again gets "I didn't buy again, because your NGN 5,000 purchase has already gone through" and the token. One row in `tokens`, one charge.

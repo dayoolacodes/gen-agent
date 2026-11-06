@@ -7,7 +7,7 @@
 **Checked before go-live.**
 - Chord: Health `ok`, discovery lists all six tools. Server: smoke test on the live URL and 18 unit tests pass.
 - Real VTpass sandbox vend returned a token (79.9 kWh); requery matched.
-- Simulator run (6 Nov, one continuous recording, 3 of 50 credits used across all takes): each log written once; alerts raised (units in 2.8 days, diesel spend over budget); a real VTpass purchase returned a token; the briefing then recommended diesel over units; a timed-out purchase (mock provider) got "still pending, money may have been taken, don't buy again", then the token on "check again".
+- Simulator run (6 Nov, recorded, 3 of 50 credits used): each log written once; alerts raised (units in 2.8 days, diesel spend over budget); a real VTpass purchase returned a token; the briefing then recommended diesel over units; a timed-out purchase (mock provider) got "still pending, money may have been taken, don't buy again", then the token on "check again".
 
 **Problems found in the run.**
 - The agent cannot see its own earlier tool results, so it replays earlier writes. The server now ignores identical logs and purchases for 30 minutes, so the Sheet stays correct and nobody is charged twice. The agent still sometimes "corrects" itself in chat.
