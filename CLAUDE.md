@@ -23,20 +23,6 @@ A Lagos provisions store (fictional: Adaeze Provisions, Surulere) runs a diesel 
 - Credits arrived (email received by 5 Nov). Simulator: chat.tsglabs.dev, after enabling Admin Panel > Connections > Connected Apps > Allow Approved Apps in the Chord dashboard.
 - Chord tool-call timeout is 60s (TSG Labs). The simulator cannot receive scheduled tasks, so demo the briefing by asking for it in chat; show the schedule configured in the dashboard.
 
-## Done so far
-- MCP server with six tools (log_fuel, log_diesel_on_hand, log_meter_reading, get_energy_summary, buy_units, check_vend), bearer auth, /health. `mcp` pinned to 1.26.0.
-- VTpass sandbox: real vend to 1111111111111 succeeded (token, 79.9 kWh); requery confirmed. Token and units parsing unit-tested (`python -m unittest discover tests`).
-- Forecast: top-ups logged as meter readings, burn rates from consumption intervals only, diesel days left from tank readings.
-- Smoke test: `python scripts/smoke_test.py [base_url]`, all passing locally and against Cloud Run.
-- Field notes in `notes/field-notes.md`; the three strongest are marked `[submission]`.
-- Repo: private, `github.com/dayoolacodes/gen-agent`.
-
-## Still to do (in order)
-1. Chord setup DONE 5 Nov (no credits used): Connected apps enabled and simulator approved; teammate "Energy Manager" (id ffea5a31-7db9-4f93-b21d-74c808f9f313, autonomy Act independently) with skill v1; MCP server `energy-tools` added under Admin > Channels & Tools > Tools, Health ok, six tools discovered. Confirmed 5 Nov: the teammate calls energy-tools (tool name `mcp__energy-tools__get_energy_summary`) although its Tools list does not show it. Direct-line message left credits at 50.
-   Testing rule: every chat message costs credits (50 total). Do all non-chat work first, then one planned test run.
-2. DONE 6 Nov: one continuous simulator recording (link /c/m9kR88uLaoTOuUUHQY_c55C5), 07:00 reminder exists (created in Direct Line), go-live and field notes filled in, cover doc in notes/submission.md, code ZIP at ~/Downloads/gen-agent-code.zip. Server back on VTpass (energy-mcp-00012-h54). Credits 47.
-3. Left for the user: edit/export the video, choose ZIP or public repo, upload to one Drive folder, reply to TSG with the link and role.
-
 ## Conventions
 - Keep field notes in `notes/field-notes.md`, written at the moment a problem is hit, with exact error text.
 - Do not add features beyond the brief. A small agent that works end to end with honest notes beats an ambitious one that half runs.

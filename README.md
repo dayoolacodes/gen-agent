@@ -34,7 +34,7 @@ then sets `MCP_ALLOWED_HOSTS` to both Cloud Run hostnames. Without that, every M
 For a quick test from a laptop, `ngrok http 8000` works too; set `MCP_ALLOWED_HOSTS` to the ngrok hostname
 and restart. `render.yaml` is kept as an alternative but has not been deployed.
 
-## Register in Chord (as done on 5 Nov, dashboard at www.chordhq.xyz)
+## Register in Chord
 
 1. Admin -> Channels & Tools -> Tools tab -> Custom tools (MCP) -> Add server. (The "Add tool" link in a
    teammate's settings sends you here.) Name `energy-tools`, URL `https://<host>/mcp`, Auth type `bearer`,
