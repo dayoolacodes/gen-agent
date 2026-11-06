@@ -26,17 +26,18 @@ Chord teammate (skill) → MCP server on Google Cloud Run (six tools, bearer aut
 | `go-live.md` | Half-page go-live note: what is live, what was checked, problems found, limits, rollback |
 | Code | [REPO LINK OR ZIP] |
 
-**Try it yourself:** https://chat.tsglabs.dev/c/AXtJLHL6jR6CMZrX2oTIyrBN
+**Try it yourself:** https://chat.tsglabs.dev/c/m9kR88uLaoTOuUUHQY_c55C5
 
 ## What you're watching in the recording
 
-1. **Everyday use (VTpass sandbox).** Diesel, tank level and meter reading are each logged once; the Sheet updates alongside. The summary raises a real alert: diesel spend NGN 152,250 against a NGN 150,000 weekly budget.
-2. **A real purchase.** "buy 5000 units", read back, "yes". VTpass took about 20s and the simulator showed "The agent didn't answer", although the purchase had succeeded. Sending "yes" again returns the same token with no second charge (one row in `tokens`). This is the replay protection described in the field notes.
-3. **Morning briefing.** After the top-up it recommends buying diesel, not units, because diesel now runs out first.
-4. **A purchase that goes wrong (simulated provider).** "buy 4000 units" times out. The agent gives the reference, says it is still pending, money may have been taken, and not to buy again. "check again" delivers the token. The simulated tariff differs from the sandbox, which the agent notices.
+One continuous take, with the chat on the left and the owner's Google Sheet on the right.
 
-The daily 07:00 schedule was created afterwards, outside the recording. It shows as a reminder on the teammate in Chord, since the simulator cannot show scheduled tasks.
+1. **Everyday use (VTpass sandbox).** Diesel purchase, tank level and meter reading, each logged once as a new row. The agent raises two alerts: units run out in about 2.8 days, and diesel spend is over the weekly budget (NGN 152,250 against 150,000).
+2. **A real purchase.** It checks naira against units, then buys NGN 5,000 (79.9 kWh). VTpass took about 20s, so the simulator shows "The agent didn't answer" although the purchase succeeded. "yes" again gets "I didn't buy again, because your NGN 5,000 purchase has already gone through" and the token. One row in `tokens`, one charge.
+3. **Morning briefing.** After the top-up it recommends buying diesel, not units, because diesel now runs out first.
+4. **A purchase that goes wrong (simulated provider, switched off camera).** NGN 4,000, read back, "yes", then a timeout. The agent says it is still pending, money may have been taken, and not to buy again. "check again" delivers the token.
+5. **The schedule.** "send me the morning briefing everyday at 7am" gets "Done", but the agent did not actually call the scheduling tool. I caught this afterwards from the tool trace and created the 07:00 reminder from Chord's Direct Line. See the field notes.
 
 ## The most useful finding
 
-Chord's agent does not see its own earlier tool results on later turns, so it repeats earlier writes, including purchases. I made the tool server safe against this (identical logs and purchases within 30 minutes are recognised, not repeated) rather than relying on the model. Details and evidence are in the field notes.
+Chord's agent does not see its own earlier tool results on later turns, so it repeats earlier writes, including purchases, and can claim actions it did not take. I made the tool server safe against repeats (identical logs and purchases within 30 minutes are recognised, not repeated) rather than relying on the model, and checked every claim in the recording against tool traces and the Sheet. Details and evidence are in the field notes.

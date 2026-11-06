@@ -34,10 +34,8 @@ A Lagos provisions store (fictional: Adaeze Provisions, Surulere) runs a diesel 
 ## Still to do (in order)
 1. Chord setup DONE 5 Nov (no credits used): Connected apps enabled and simulator approved; teammate "Energy Manager" (id ffea5a31-7db9-4f93-b21d-74c808f9f313, autonomy Act independently) with skill v1; MCP server `energy-tools` added under Admin > Channels & Tools > Tools, Health ok, six tools discovered. Confirmed 5 Nov: the teammate calls energy-tools (tool name `mcp__energy-tools__get_energy_summary`) although its Tools list does not show it. Direct-line message left credits at 50.
    Testing rule: every chat message costs credits (50 total). Do all non-chat work first, then one planned test run.
-2. Full WhatsApp simulator conversation incl. a buy with token, and the paid_no_token path with check_vend (use the mock meter ...22 or note why VTpass sandbox cannot produce it).
-3. Schedule for the morning briefing. Watch for cold-start timeouts at 07:00; `--min-instances 1` if needed.
-4. Field notes as problems happen. Go-live note (half page). README "AI tools used". 3-minute recording.
-5. Submit: role preference + problem statement, live agent, repo (make public or add reviewers), recording, field notes, go-live note, via Google Drive link.
+2. DONE 6 Nov: one continuous simulator recording (link /c/m9kR88uLaoTOuUUHQY_c55C5), 07:00 reminder exists (created in Direct Line), go-live and field notes filled in, cover doc in notes/submission.md, code ZIP at ~/Downloads/gen-agent-code.zip. Server back on VTpass (energy-mcp-00012-h54). Credits 47.
+3. Left for the user: edit/export the video, choose ZIP or public repo, upload to one Drive folder, reply to TSG with the link and role.
 
 ## Conventions
 - Keep field notes in `notes/field-notes.md`, written at the moment a problem is hit, with exact error text.
