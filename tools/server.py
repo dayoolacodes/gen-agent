@@ -26,6 +26,9 @@ GEN_LITRES_PER_HOUR = float(os.getenv("GEN_LITRES_PER_HOUR", "1.8"))  # 7.5kVA d
 MAX_UNATTENDED_NGN = float(os.getenv("MAX_UNATTENDED_NGN", "20000"))
 DIESEL_ALERT_DAYS = float(os.getenv("DIESEL_ALERT_DAYS", "1"))
 STALE_READING_DAYS = float(os.getenv("STALE_READING_DAYS", "2"))  # older than this: ask staff for a fresh one
+# Chord's agent replays earlier write tool calls on later turns (field notes, 6 Nov), and staff resend
+# messages. An identical log or purchase inside this window is treated as the same one, not a new one.
+DEDUPE_MINUTES = float(os.getenv("DEDUPE_MINUTES", "30"))
 
 # FastMCP's DNS-rebinding guard only accepts localhost Host headers by default, so behind ngrok or
 # Render every request gets 421 "Invalid Host header". List the public host(s), comma-separated,
@@ -47,8 +50,8 @@ def log_fuel(litres: float, cost_ngn: float, logged_by: str = "staff", note: str
         return {"ok": False, "error": "litres and cost_ngn must be positive"}
     row = {"ts": now_iso(), "type": "diesel", "litres": litres, "cost_ngn": cost_ngn,
            "meter_units": "", "logged_by": logged_by, "note": note}
-    store.append("energy", row)
-    return {"ok": True, "logged": row, "price_per_litre": round(cost_ngn / litres, 2)}
+    out = _append_once(row, ("type", "litres", "cost_ngn", "logged_by"))
+    return {**out, "price_per_litre": round(cost_ngn / litres, 2)}
 
 
 @mcp.tool()
@@ -58,8 +61,7 @@ def log_meter_reading(units: float, logged_by: str = "staff", note: str = "") ->
         return {"ok": False, "error": "units cannot be negative"}
     row = {"ts": now_iso(), "type": "meter", "litres": "", "cost_ngn": "",
            "meter_units": units, "logged_by": logged_by, "note": note}
-    store.append("energy", row)
-    return {"ok": True, "logged": row}
+    return _append_once(row, ("type", "meter_units", "logged_by"))
 
 
 @mcp.tool()
@@ -70,8 +72,7 @@ def log_diesel_on_hand(litres: float, logged_by: str = "staff", note: str = "") 
         return {"ok": False, "error": "litres cannot be negative"}
     row = {"ts": now_iso(), "type": "diesel_level", "litres": litres, "cost_ngn": "",
            "meter_units": "", "logged_by": logged_by, "note": note}
-    store.append("energy", row)
-    return {"ok": True, "logged": row}
+    return _append_once(row, ("type", "litres", "logged_by"))
 
 
 @mcp.tool()
@@ -137,6 +138,15 @@ def buy_units(meter_no: str, amount_ngn: float, requested_by: str = "owner") -> 
     if amount_ngn > MAX_UNATTENDED_NGN and requested_by != "owner":
         return {"ok": False, "status": "needs_owner",
                 "error": f"Amounts above NGN {MAX_UNATTENDED_NGN:,.0f} need the owner to confirm"}
+    earlier = _recent_purchase(meter_no, amount_ngn)
+    if earlier:
+        return {"ok": earlier.get("status") == "ok", "already_bought": True,
+                "status": earlier.get("status"), "reference": earlier.get("reference"),
+                "meter_no": meter_no, "amount_ngn": amount_ngn, "units": earlier.get("units") or None,
+                "token": earlier.get("token") or None,
+                "error": f"This purchase (same meter and amount) was already made at {earlier.get('ts')}, "
+                         f"reference {earlier.get('reference')}. Not buying again. If it has no token, "
+                         f"use check_vend with that reference."}
     res = vend.buy(meter_no, amount_ngn)
     store.append("tokens", {"ts": now_iso(), "reference": res.reference, "meter_no": res.meter_no,
                             "amount_ngn": res.amount_ngn, "units": res.units or "", "token": res.token or "",
@@ -192,6 +202,36 @@ def _diesel_litres_per_day(rows: list[dict]) -> float | None:
         used += dl
         span_days += max((_ts(b) - _ts(a)).total_seconds() / 86400, 1 / 24)
     return round(used / span_days, 2) if span_days else None
+
+
+def _same(a, b) -> bool:
+    try:
+        return float(a) == float(b)
+    except (TypeError, ValueError):
+        return str(a).strip().lower() == str(b).strip().lower()
+
+
+def _recent(r: dict) -> bool:
+    return datetime.now(timezone.utc) - _ts(r) <= timedelta(minutes=DEDUPE_MINUTES)
+
+
+def _append_once(row: dict, keys: tuple) -> dict:
+    """Append a log row unless the same entry was logged in the last DEDUPE_MINUTES."""
+    for r in reversed(store.rows("energy")):
+        if _recent(r) and all(_same(r.get(k), row[k]) for k in keys):
+            return {"ok": True, "already_logged": True, "logged": r,
+                    "note": f"Already recorded at {r['ts']}; not added again."}
+    store.append("energy", row)
+    return {"ok": True, "logged": row}
+
+
+def _recent_purchase(meter_no: str, amount_ngn: float) -> dict | None:
+    """A purchase for the same meter and amount in the last DEDUPE_MINUTES that may have taken money."""
+    for r in reversed(store.rows("tokens")):
+        if (_recent(r) and _same(r.get("meter_no"), meter_no) and _same(r.get("amount_ngn"), amount_ngn)
+                and r.get("status") not in ("invalid_meter", "declined")):
+            return r
+    return None
 
 
 def _age_days(r: dict) -> float:
