@@ -1,29 +1,21 @@
 # Go-live note: Energy Manager for Adaeze Provisions
 
-**What is live.** A Chord teammate, "Energy Manager" (workspace Dayo, autonomy "Act independently"), that staff and the owner message on WhatsApp. It logs diesel purchases, tank levels and meter readings to a Google Sheet, projects days of diesel and units left, gives a three-line morning briefing, and buys prepaid units through the VTpass sandbox. Its tools come from one MCP server on Google Cloud Run: `https://energy-mcp-210407125100.europe-west1.run.app/mcp` (bearer auth, six tools). All data is made up and all keys are sandbox keys.
+**What is live.** A Chord teammate, "Energy Manager", that staff and the owner message on WhatsApp. It logs diesel purchases, tank levels and meter readings to a Google Sheet, projects days of diesel and units left, gives a morning briefing (scheduled daily at 07:00 Lagos time), and buys prepaid units through the VTpass sandbox. Its six tools come from an MCP server on Google Cloud Run (`https://energy-mcp-210407125100.europe-west1.run.app/mcp`, bearer auth). Test keys and made-up data only.
 
-**How to try it.** Simulator chat link (business "Adaeze Provisions"): https://chat.tsglabs.dev/c/AXtJLHL6jR6CMZrX2oTIyrBN. Try: "bought 25 litres diesel 32,500", "tank at about 15 litres", "meter showing 98", "how are we doing on fuel", "buy 5000 units" then "yes".
+**Try it.** https://chat.tsglabs.dev/c/AXtJLHL6jR6CMZrX2oTIyrBN (business "Adaeze Provisions"). For example: "bought 25 litres diesel 32,500", "tank at about 15 litres", "meter showing 98", "how are we doing?", "buy 5000 units" then "yes".
 
 **Checked before go-live.**
-- Chord: Health `ok`, tool discovery lists all six tools.
-- Server: smoke test passes on the live URL (/health, 401 without a token, discovery, every tool, every mock vend outcome). 13 unit tests pass (token and units parsing, purchase time budget, forecast from today).
-- VTpass sandbox: real vend to meter 1111111111111 returned a token and 79.9 kWh; requery matched.
-- A purchase is bounded to about 52s worst case (cold start included), under Chord's 60s tool timeout.
-- In Chord (direct line, 5 Nov): "how are we doing on fuel?" called `get_energy_summary` (531ms; Cloud Run logged the tool list and the tool call). This confirmed the teammate can use the workspace MCP server even though its Tools list does not show it. It also showed the seed data had gone stale, which led to the forecast fix and a reseed. Skill v4 and server revision `energy-mcp-00008-vtd` are live.
-- In the simulator: [TO FILL after the test run: purchase with token, timeout then pending then token via check_vend, briefing on request, anything that failed].
+- Chord: Health `ok`, discovery lists all six tools. Server: smoke test on the live URL and 18 unit tests pass.
+- Real VTpass sandbox vend returned a token (79.9 kWh); requery matched.
+- Simulator run (6 Nov, recorded, 2 of 50 credits): each log written once; budget alert raised; real purchase returned a token; on a timed-out purchase (mock provider) the agent said "still pending, don't buy again", then delivered the token on "check again"; the briefing recommended diesel over units after a top-up; the 07:00 schedule was created.
 
-**Known limits.**
-- Sandbox only. The "paid but no token" path was shown with the mock provider, because VTpass's pending test meter fails verification before payment.
-- The 07:00 briefing is scheduled, but the simulator cannot show scheduled tasks, so the demo asks for it in chat.
-- Stock on hand is an estimate from the last reading and the usual burn. If staff stop sending readings, the agent says the reading is old and asks for a new one.
-- Each Chord message uses credits.
+**Problems found in the run.**
+- The agent cannot see its own earlier tool results, so it replays earlier writes. The server now ignores identical logs and purchases for 30 minutes, so the Sheet stays correct and nobody is charged twice. The agent still sometimes "corrects" itself in chat.
+- VTpass took about 20s, and the simulator showed "The agent didn't answer" while the purchase succeeded. Sending "yes" again returned the same token with no new charge.
+- Once the agent sent "on file" instead of the meter number. It was rejected with no charge, and the retry used the right meter.
 
-**What to watch.**
-- `tokens` tab in the Sheet: any `paid_no_token` or `timeout` row without a later `ok` needs a check before anyone buys again.
-- Cloud Run logs for errors and slow VTpass calls (sandbox pay has taken between 1s and 18s).
-- VTpass sandbox wallet balance, and Chord credits.
+**Known limits.** Sandbox only. The "paid but no token" path can only be shown with the mock provider, since VTpass's pending test meter fails verification. The simulator cannot show scheduled tasks. Stock on hand is an estimate; the agent asks for a fresh reading when one is over 2 days old. A deliberate second identical purchase within 30 minutes is refused.
 
-**Rollback.**
-- Pause the teammate in Chord (reversible, history kept).
-- Untick "Enabled" on the `energy-tools` server.
-- Route Cloud Run traffic back to an earlier revision, or redeploy with `VEND_PROVIDER=mock`.
+**Watch.** Any `timeout` or `paid_no_token` row in the `tokens` tab without a later `ok`. Cloud Run logs for errors and slow VTpass calls. Wallet balance and Chord credits.
+
+**Rollback.** Pause the teammate in Chord (reversible), untick "Enabled" on the `energy-tools` server, or route Cloud Run back to an earlier revision. Live now: skill v4, revision `energy-mcp-00010-4mz`.
