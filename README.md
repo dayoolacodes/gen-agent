@@ -8,7 +8,7 @@ projects when power will run out, and buys electricity units when the owner says
 ```
 skill/          SKILL.md + references/shop.md   -> upload as the Chord skill
 tools/          MCP server (FastMCP, Streamable HTTP) -> register in Chord as a tool server
-  server.py     six tools: log_fuel, log_diesel_on_hand, log_meter_reading, get_energy_summary, buy_units, check_vend
+  server.py     seven tools: log_fuel, log_diesel_on_hand, log_meter_reading, get_energy_summary, buy_units, check_vend, get_recent_activity
   storage.py    Google Sheet (gspread) or local JSON, same interface
   vend.py       vending providers: MockVend (deterministic, default) and VTPassVend (VTpass sandbox)
 notes/          field-notes.md (written as problems are hit) and go-live note

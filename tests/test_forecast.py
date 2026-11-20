@@ -53,7 +53,7 @@ class Forecast(unittest.TestCase):
     def test_top_up_builds_on_todays_estimate(self):
         add(24 * 3, "meter", units=156)
         add(24 * 2, "meter", units=128)  # about 72 left today
-        r = s.buy_units("62101234567", 9000, "owner")  # mock ok: 9000 / 225 = 40 units
+        r = s.buy_units(9000, "owner", meter_no="62101234567")  # mock ok: 9000 / 225 = 40 units
         self.assertEqual(r["status"], "ok")
         last = sorted((x for x in s.store.rows("energy") if x["type"] == "meter"), key=s._ts)[-1]
         self.assertEqual(last["logged_by"], "system")

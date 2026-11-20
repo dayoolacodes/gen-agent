@@ -15,7 +15,7 @@ from pathlib import Path
 
 ENERGY_HEADERS = ["ts", "type", "litres", "cost_ngn", "meter_units", "logged_by", "note"]
 REQUERY_HEADERS = ["ts", "reference"]
-TOKEN_HEADERS = ["ts", "reference", "meter_no", "amount_ngn", "units", "token", "status", "error"]
+TOKEN_HEADERS = ["ts", "reference", "meter_no", "amount_ngn", "units", "token", "status", "error", "requested_by"]
 
 
 def now_iso() -> str:
@@ -83,8 +83,16 @@ class SheetsStore:
             ws = self.sh.add_worksheet(title=tab, rows=1000, cols=len(headers))
             ws.append_row(headers)
             return
-        if not ws.row_values(1):
+        current = ws.row_values(1)
+        if not current:
             ws.append_row(headers)
+            return
+        missing = [h for h in headers if h not in current]
+        if missing:  # add new columns to an existing tab without touching its rows
+            if ws.col_count < len(current) + len(missing):
+                ws.add_cols(len(current) + len(missing) - ws.col_count)
+            for i, h in enumerate(missing, start=len(current) + 1):
+                ws.update_cell(1, i, h)
 
     def append(self, tab: str, row: dict) -> None:
         ws = self.sh.worksheet(tab)

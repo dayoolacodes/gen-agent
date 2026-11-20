@@ -37,11 +37,11 @@ def tools_in_process():
                 "62101234522": "paid_no_token", "62101234533": "declined"}
     refs = {}
     for meter, want in outcomes.items():
-        r = s.buy_units(meter, 5000, "owner")
+        r = s.buy_units(5000, "owner", meter_no=meter)
         refs[want] = r["reference"]
         check(f"buy_units {meter} -> {want}", r["status"] == want, r.get("error") or r.get("token"))
-    check("buy_units under NGN 1,000 -> declined", s.buy_units("62101234567", 500, "owner")["status"] == "declined")
-    check("buy_units staff over limit -> needs_owner", s.buy_units("62101234567", 50000, "Ade")["status"] == "needs_owner")
+    check("buy_units under NGN 1,000 -> declined", s.buy_units(500, "owner", meter_no="62101234567")["status"] == "declined")
+    check("buy_units staff over limit -> needs_owner", s.buy_units(50000, "Ade", meter_no="62101234567")["status"] == "needs_owner")
 
     meter_after = s.get_energy_summary(7)["meter"]
     check("forecast survives top-up", meter_after["days_left"] is not None and meter_after["units_now"] > 260, str(meter_after))
@@ -70,7 +70,7 @@ async def over_http(base):
         async with ClientSession(read, write) as session:
             await session.initialize()
             names = sorted(t.name for t in (await session.list_tools()).tools)
-    check("tool discovery lists six tools", len(names) == 6, ", ".join(names))
+    check("tool discovery lists seven tools", len(names) == 7, ", ".join(names))
     return health
 
 

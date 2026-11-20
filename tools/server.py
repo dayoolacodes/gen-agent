@@ -6,7 +6,9 @@ Register in Chord with auth_type "bearer" and auth_token = MCP_BEARER_TOKEN.
 """
 from __future__ import annotations
 
+import hmac
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import FastMCP
@@ -29,6 +31,13 @@ STALE_READING_DAYS = float(os.getenv("STALE_READING_DAYS", "2"))  # older than t
 # Chord's agent replays earlier write tool calls on later turns (field notes, 6 Nov), and staff resend
 # messages. An identical log or purchase inside this window is treated as the same one, not a new one.
 DEDUPE_MINUTES = float(os.getenv("DEDUPE_MINUTES", "30"))
+# The shop's meter lives in server config, not in the model's hands: in testing the model once sent
+# "on file" as the meter number and once asked staff to type it.
+SHOP_METER_NO = os.getenv("SHOP_METER_NO", "1111111111111")
+# A purchase logged within this many minutes after a tank reading is taken to be already in that
+# reading ("bought 25 litres, tank now at 15" means 15 including the 25).
+SAME_MESSAGE_MINUTES = float(os.getenv("SAME_MESSAGE_MINUTES", "5"))
+_buy_lock = threading.Lock()  # duplicate check and vend happen as one step
 
 # FastMCP's DNS-rebinding guard only accepts localhost Host headers by default, so behind ngrok or
 # Render every request gets 421 "Invalid Host header". List the public host(s), comma-separated,
@@ -132,25 +141,34 @@ def get_energy_summary(days: int = 7) -> dict:
 
 
 @mcp.tool()
-def buy_units(meter_no: str, amount_ngn: float, requested_by: str = "owner") -> dict:
-    """Buy prepaid electricity units for the shop's meter. Only call after the owner confirms the amount.
-    Returns a token on success, or a typed failure: invalid_meter, timeout, paid_no_token, declined."""
-    if amount_ngn > MAX_UNATTENDED_NGN and requested_by != "owner":
+def buy_units(amount_ngn: float, requested_by: str, meter_no: str = "") -> dict:
+    """Buy prepaid electricity units for the shop's meter. Only call after the person has confirmed the
+    amount with a yes. requested_by is the name of the person asking (e.g. Adaeze, Ade, Tunde).
+    The shop's meter number is filled in by the server; leave meter_no empty.
+    Returns a token on success, or a typed failure: invalid_meter, timeout, paid_no_token, declined.
+    already_bought means this person already bought this amount in the last 30 minutes: show that
+    purchase's token and reference, nothing new was bought."""
+    meter = meter_no.strip() if meter_no.strip().isdigit() else SHOP_METER_NO
+    who = (requested_by or "").strip() or "unknown"
+    if amount_ngn <= 0:
+        return {"ok": False, "status": "declined", "error": "Amount must be a positive naira amount. No money was taken."}
+    if amount_ngn > MAX_UNATTENDED_NGN and who.lower() not in ("owner", "adaeze"):
         return {"ok": False, "status": "needs_owner",
-                "error": f"Amounts above NGN {MAX_UNATTENDED_NGN:,.0f} need the owner to confirm"}
-    earlier = _recent_purchase(meter_no, amount_ngn)
-    if earlier:
-        return {"ok": earlier.get("status") == "ok", "already_bought": True,
-                "status": earlier.get("status"), "reference": earlier.get("reference"),
-                "meter_no": meter_no, "amount_ngn": amount_ngn, "units": earlier.get("units") or None,
-                "token": earlier.get("token") or None,
-                "error": f"This purchase (same meter and amount) was already made at {earlier.get('ts')}, "
-                         f"reference {earlier.get('reference')}. Not buying again. If it has no token, "
-                         f"use check_vend with that reference."}
-    res = vend.buy(meter_no, amount_ngn)
-    store.append("tokens", {"ts": now_iso(), "reference": res.reference, "meter_no": res.meter_no,
-                            "amount_ngn": res.amount_ngn, "units": res.units or "", "token": res.token or "",
-                            "status": res.status, "error": res.error or ""})
+                "error": f"Amounts above NGN {MAX_UNATTENDED_NGN:,.0f} need Adaeze to confirm. Nothing was bought."}
+    with _buy_lock:
+        earlier = _recent_purchase(meter, amount_ngn, who)
+        if earlier:
+            return {"ok": earlier.get("status") == "ok", "already_bought": True,
+                    "status": earlier.get("status"), "reference": earlier.get("reference"),
+                    "meter_no": meter, "amount_ngn": amount_ngn, "units": earlier.get("units") or None,
+                    "token": earlier.get("token") or None, "bought_at": earlier.get("ts"),
+                    "error": f"{who} already bought NGN {amount_ngn:,.0f} for this meter at {earlier.get('ts')}, "
+                             f"reference {earlier.get('reference')}. Nothing new was bought. If it has no token, "
+                             f"use check_vend with that reference."}
+        res = vend.buy(meter, amount_ngn)
+        store.append("tokens", {"ts": now_iso(), "reference": res.reference, "meter_no": res.meter_no,
+                                "amount_ngn": res.amount_ngn, "units": res.units or "", "token": res.token or "",
+                                "status": res.status, "error": res.error or "", "requested_by": who})
     _log_top_up(res)
     return {"ok": res.status == "ok", **res.dict()}
 
@@ -159,12 +177,29 @@ def buy_units(meter_no: str, amount_ngn: float, requested_by: str = "owner") -> 
 def check_vend(reference: str) -> dict:
     """Re-check a purchase that was paid but returned no token. Use when a previous buy_units
     returned status paid_no_token or timeout. Returns the token if the provider has now issued it."""
+    before = next((r for r in store.rows("tokens") if r.get("reference") == reference), None)
     res = vend.requery(reference)
     if res.status == "ok":
         store.update_where("tokens", "reference", reference,
                            {"status": "ok", "token": res.token, "units": res.units, "error": ""})
-        _log_top_up(res)
+        if before is None or before.get("status") != "ok":  # already counted when it first went ok
+            _log_top_up(res)
     return {"ok": res.status == "ok", **res.dict()}
+
+
+@mcp.tool()
+def get_recent_activity(hours: float = 24) -> dict:
+    """What has already been logged and bought in the last N hours, newest first: diesel purchases,
+    tank levels, meter readings and every unit purchase with its status, token and reference.
+    Call this before saying anything about an earlier purchase or log, because you cannot see the
+    results of tool calls from earlier messages. Never say a purchase did not happen without checking."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    logs = [{k: r.get(k) for k in ("ts", "type", "litres", "cost_ngn", "meter_units", "logged_by")}
+            for r in store.rows("energy") if _ts(r) >= cutoff and r.get("note") != "seed"]
+    buys = [{k: r.get(k) for k in ("ts", "reference", "amount_ngn", "units", "token", "status", "requested_by", "error")}
+            for r in store.rows("tokens") if _ts(r) >= cutoff]
+    return {"hours": hours, "shop_meter_no": SHOP_METER_NO,
+            "purchases": list(reversed(buys)), "logs": list(reversed(logs))}
 
 
 RATE_WINDOW_DAYS = 14  # how far back to look when working out the burn rate
@@ -195,7 +230,7 @@ def _diesel_litres_per_day(rows: list[dict]) -> float | None:
     used = 0.0
     span_days = 0.0
     for a, b in zip(levels, levels[1:]):
-        bought = sum(float(r["litres"] or 0) for r in buys if _ts(a) < _ts(r) <= _ts(b))
+        bought = sum(float(r["litres"] or 0) for r in buys if _ts(a) < _purchase_time(r, levels) <= _ts(b))
         dl = float(a["litres"]) + bought - float(b["litres"])
         if dl <= 0:
             continue
@@ -225,10 +260,12 @@ def _append_once(row: dict, keys: tuple) -> dict:
     return {"ok": True, "logged": row}
 
 
-def _recent_purchase(meter_no: str, amount_ngn: float) -> dict | None:
-    """A purchase for the same meter and amount in the last DEDUPE_MINUTES that may have taken money."""
+def _recent_purchase(meter_no: str, amount_ngn: float, requested_by: str) -> dict | None:
+    """A purchase by the same person, for the same meter and amount, in the last DEDUPE_MINUTES that may
+    have taken money. Keyed on the person too: a different person buying the same amount is a new purchase."""
     for r in reversed(store.rows("tokens")):
         if (_recent(r) and _same(r.get("meter_no"), meter_no) and _same(r.get("amount_ngn"), amount_ngn)
+                and _same(r.get("requested_by") or "unknown", requested_by)
                 and r.get("status") not in ("invalid_meter", "declined")):
             return r
     return None
@@ -236,6 +273,17 @@ def _recent_purchase(meter_no: str, amount_ngn: float) -> dict | None:
 
 def _age_days(r: dict) -> float:
     return max((datetime.now(timezone.utc) - _ts(r)).total_seconds() / 86400, 0.0)
+
+
+def _purchase_time(buy: dict, levels: list[dict]) -> datetime:
+    """When a purchase entered the tank, for the maths. A purchase logged within SAME_MESSAGE_MINUTES after
+    a tank reading is treated as already included in that reading."""
+    t = _ts(buy)
+    for lv in levels:
+        gap = (t - _ts(lv)).total_seconds() / 60
+        if 0 <= gap <= SAME_MESSAGE_MINUTES:
+            return _ts(lv) - timedelta(seconds=1)
+    return t
 
 
 def _diesel_on_hand(rows: list[dict], burn: float | None) -> tuple[float | None, float | None]:
@@ -246,7 +294,8 @@ def _diesel_on_hand(rows: list[dict], burn: float | None) -> tuple[float | None,
         return None, None
     last = levels[-1]
     age = _age_days(last)
-    bought = sum(float(r["litres"] or 0) for r in rows if r.get("type") == "diesel" and _ts(r) > _ts(last))
+    bought = sum(float(r["litres"] or 0) for r in rows
+                 if r.get("type") == "diesel" and _purchase_time(r, levels) > _ts(last))
     est = float(last["litres"]) + bought - (burn or 0) * age
     return round(max(est, 0.0), 1), round(age, 1)
 
@@ -282,9 +331,12 @@ def _ts(r: dict) -> datetime:
 
 class BearerAuth(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        expected = os.getenv("MCP_BEARER_TOKEN")
-        if expected and request.url.path.startswith("/mcp"):
-            if request.headers.get("authorization") != f"Bearer {expected}":
+        if request.url.path.startswith("/mcp"):
+            expected = os.getenv("MCP_BEARER_TOKEN", "")
+            if not expected:  # fail closed: no token configured means nobody gets in
+                return JSONResponse({"error": "server has no MCP_BEARER_TOKEN set"}, status_code=503)
+            got = request.headers.get("authorization", "")
+            if not hmac.compare_digest(got.encode(), f"Bearer {expected}".encode()):
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
         return await call_next(request)
 
